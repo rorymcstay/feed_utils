@@ -21,7 +21,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from urllib3.exceptions import MaxRetryError, ProtocolError
 
-from settings import feed_params, browser_params, nanny_params
+from feed.settings import feed_params, browser_params, nanny_params
 from src.main.exceptions import NextPageException
 from src.main.market.utils.WebCrawlerConstants import WebCrawlerConstants
 

@@ -6,12 +6,12 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="feed_utils",
     version="0.0.0",
-    author="Example Author",
+    author="Rory McStay",
     author_email="rory@rorymcstay.com",
     description="Common code for feed",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pypa/sampleproject",
+    url="https://github.com/rorymcstay/feed_utils",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

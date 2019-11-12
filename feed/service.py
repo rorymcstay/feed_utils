@@ -18,9 +18,10 @@ class Client:
 
     def __init__(self, name, attempts=0, **params):
         try:
-            hc = r.get("http://{host}:{port}/{api_prefix}/healthCheck")
+            hc = r.get("http://{host}:{port}/service/healthCheck")
             if hc.status_code is 200:
                 self.health = True
+                logging.info(f'connected to {name}')
             if hc.status_code is 404:
                 logging.info(f'health check for {name}/{params.get("api_prefix")} was not found')
             else:
@@ -34,6 +35,3 @@ class Client:
             else:
                 logging.error(f'could not connect to {name}. Giving up. \nParameters were:  \n{json.dumps(params, indent=4)}')
                 sys.exit()
-
-
-
