@@ -7,7 +7,10 @@ kafka_params = {
 browser_params = {
     "port": os.getenv("BROWSER_PORT", 4444),
     "host": os.getenv("BROWSER_CONTAINER_HOST", None),
-    "image": os.getenv('BROWSER_IMAGE', 'selenium/standalone-chrome:3.141.59')
+    "image": os.getenv('BROWSER_IMAGE', 'selenium/standalone-chrome:3.141.59'),
+    "base": os.getenv('BROWSER_BASE_PORT', 4444),
+    "max": os.getenv("MAX_FEEDS", 10),
+    "base_port": os.getenv("BROWSER_BASE_PORT", 4444)
 }
 
 routing_params = {
@@ -34,7 +37,6 @@ mongo_params = {
     "serverSelectionTimeoutMS": 5
 }
 
-
 database_parameters = {
     "host": os.getenv("DATABASE_HOST", "localhost"),
     "port": os.getenv("DATABASE_PORT", 5432),
@@ -43,7 +45,16 @@ database_parameters = {
     "password": os.getenv("DATABASE_PASS", "postgres"),
 }
 
+feed_params = {
+    "image": os.getenv("LEADER_TEMPLATE"),
+    "success": os.getenv("LEADER_START", "feed has started"),
+    "base_port": int(os.getenv("LEADER_BASE_PORT", 9000))
+}
 
+retry_params = {
+    "times": 10,
+    "wait": 10
+}
 
 class BrowserConstants:
     CONTAINER_TIMEOUT = int(os.getenv('CONTAINER_TIMEOUT', 10))
