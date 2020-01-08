@@ -45,13 +45,13 @@ class BrowserService:
             else:
                 logging.info(f'connecting to container on port {port.text}')
                 self.port = port.text
-                if not isinstance(self.port, int):
+                if not all(char.isdigit() for char in self.port):
                     logging.error(f'Nanny container did not return a valid port number {port.text}')
                     raise CrawlerException(port.text)
                 # if no browser params specified then running in docker
                 # => different host
                 if browser_params['host'] is None:
-                    url = f'http://worker-{self.port}:{browser_params.get["port"]}/wd/hub'
+                    url = f'http://worker-{self.port}:{browser_params["port"]}/wd/hub'
                 else:
                     # otherwise always localhost
                     url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
@@ -59,10 +59,9 @@ class BrowserService:
                 logging.info(f'Starting remote webdriver with {url}')
                 options = Options()
                 options.add_argument("--headless")
-                self.startWebdriverSession(url, options, self.port)
+                self.startWebdriverSession(url, options)
         except Exception as e:
             traceback.print_exc()
-            excep = CrawlerException(port.text)
             if attempts < self.retry_attempts:
                 logging.warning(f'error getting container: {port.text}')
                 sleep(self.retry_wait)
@@ -72,10 +71,7 @@ class BrowserService:
                 sys.exit()
         logging.info(f'success')
 
-    def startWebdriverSession(self, url, options, attempts=0):
-
-        max_attempts = 10
-        attempts += 1
+    def startWebdriverSession(self, url, options):
         self.driver = webdriver.Remote(command_executor=url,
                                        desired_capabilities=DesiredCapabilities.CHROME,
                                        options=options)
