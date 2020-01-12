@@ -22,7 +22,8 @@ logging = log.getLogger(__name__)
 class CrawlerException(Exception):
     def __init__(self, port):
         if all(char.isdigit() for char in port):
-            requests.get("http://{host}:{port}/containercontroller/freeContainer/{sub_port}".format(sub_port=port, **nanny_params))
+            requests.get("http://{host}:{port}/containercontroller/freeContainer/{sub_port}".format(sub_port=port,
+                                                                                                    **nanny_params))
         else:
             sys.exit()
 
@@ -32,7 +33,8 @@ class BrowserService:
     retry_wait = 10
     retry_attempts = 10
 
-    def __init__(self, attempts=0, getContainerUrl="http://{host}:{port}/{api_prefix}/getContainer".format(**nanny_params)):
+    def __init__(self, attempts=0,
+                 getContainerUrl="http://{host}:{port}/{api_prefix}/getContainer".format(**nanny_params)):
         """
         Request a port of the nanny service and then start a webdriver session
         :param attempts: will recursively try to get a container, do not populate
@@ -51,7 +53,7 @@ class BrowserService:
                 # if no browser params specified then running in docker
                 # => different host
                 if browser_params['host'] is None:
-                    url = f'http://worker-{self.port}:{browser_params["port"]}/wd/hub'
+                    url = f'http://worker-{self.port}:{browser_params["internal_port"]}/wd/hub'
                 else:
                     # otherwise always localhost
                     url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
@@ -65,7 +67,7 @@ class BrowserService:
             if attempts < self.retry_attempts:
                 logging.warning(f'error getting container: {port.text}')
                 sleep(self.retry_wait)
-                self.__init__()
+                self.__init__(attempts=attempts + 1)
             else:
                 logging.error(f'could connect to {getContainerUrl}')
                 sys.exit()

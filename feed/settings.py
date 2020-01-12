@@ -5,7 +5,7 @@ kafka_params = {
 }
 
 browser_params = {
-    "port": os.getenv("BROWSER_PORT", 4444),
+    "internal_port":  4444,
     "host": os.getenv("BROWSER_CONTAINER_HOST", None),
     "image": os.getenv('BROWSER_IMAGE', 'selenium/standalone-chrome:3.141.59'),
     "base": os.getenv('BROWSER_BASE_PORT', 4444),
