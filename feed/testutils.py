@@ -14,7 +14,7 @@ IGNORE_FAILS = True
 TEST_CLAUSES = ["request", "response", "payload"]
 MANDATORY = ["request", "response"]
 JSON_CHARS = '}{:,"'
-METHOD_POS = 2  # if leading slash, method name will be in second chunk of request
+METHOD_POS = 2  # if leading slash in doc example, method name will be in second chunk of request
 
 
 class MethodNotImplemented(Response):
@@ -43,10 +43,6 @@ class ExpectedRequest:
         self.actualResponse = None
         self.actualPayload = None
         self.actualCase = None
-
-        '''func = getattr(self, f'_{clause}')
-        if func is None:
-            assert (f'method _{clause} is not implemted' and False)'''
 
         for i in self.cases:
             case = self.cases.get(i)
@@ -77,7 +73,7 @@ class ExpectedRequest:
         return self._response()
 
     def handleTest(self, case):
-        self._response(case, {})
+        self._response(case, actual={})
 
     def _request(self):
         action = self.cases.get(self.actualCase)
@@ -86,6 +82,7 @@ class ExpectedRequest:
                 f'specific scenario not found actual: {self.actualCase}, expected one of: {self.cases.keys()}')
 
     def _response(self, actual=None):
+        # TODO actual is for the a test runner for testing the class given the documentation and not mocking
         caseDetails = self.cases.get(self.actualCase)
         if caseDetails is None:
             logging.error(False and f'{self.actualCase} is not implemented')
@@ -126,10 +123,9 @@ class DocumentationTest:
 
     def getValidMethods(self):
         dec = inspect.getsource(self.name).split("\n")[0]
-        out = []
         default = ['GET']
         substrs = dec.split('methods')
-        if len(substrs) == 1 or '@route' not in dec:
+        if len(substrs) == 1 or '@route' not in dec:  # if len of split is 1, methods not defined, use default
             return default
         substrs = substrs[1].split(']')
         i, loc = 0, None
@@ -154,10 +150,13 @@ class DocumentationTest:
         clauses = case[0].split()
         while i < len(clauses):
             if any(clause in clauses[i] for clause in TEST_CLAUSES):
+                # we found a test clause, following it is the details
                 clause = clauses[i]
                 det = ''
                 i += 1 if len(clauses) > i else 0
                 while not any(clau in clauses[i] for clau in TEST_CLAUSES) and i < len(clauses):
+                    # we have split on spaces here so a dictionary will be fragmented. This while loop puts it
+                    # back together
                     det += clauses[i]
                     i += 1
                     if i >= len(clauses):
@@ -176,7 +175,7 @@ class DocumentationTest:
 
     @staticmethod
     def generate(func: callable) -> ExpectedRequest:
-        # TODO when func has no arguments, we only can store one case as we store in map with the url.
+        # TODO when func has no arguments, we only can store one case as we store in map with the url as key.
         # TODO should have some sort of multimap or list of dicts
         doc = DocumentationTest(func)
         names = doc.getNames()
@@ -193,6 +192,8 @@ class DocumentationTest:
                         req = items.get(i)
                         continue
                     if items.get(i) is None:
+                        # implies non default clause
+                        # TODO check that i is not in MANDATORY
                         continue
                     else:
                         case.update({i: items.get(i)})
@@ -209,7 +210,7 @@ class MockedMethod:
         self.argspec = getfullargspec(method)
         self.method = method
 
-    # TODO this method fails when running as expectedRequest is not defined. should fix
+    # TODO this method fails when running as expectedRequest is not defined when class is being initialised. should fix
     # def __str__(self):
     #   return f'{self.__class__.__name__}: {self.expectedRequest.methods}, \
     #           cases: {json.dumps(self.expectedRequest.cases, indent=4)}'
@@ -230,7 +231,6 @@ def MockFactory(service, app):
             self.actions = {}
 
         def init(self):
-            # TODO non callables not being filtered out... feedName is getting in there
             serviceMethods = [method for method in
                               filter(lambda method: callable(getattr(service, method)) and '_' not in method,
                                      dir(service))]
