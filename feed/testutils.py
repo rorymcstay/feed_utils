@@ -13,7 +13,7 @@ FAIL_CODE = 511
 IGNORE_FAILS = True
 TEST_CLAUSES = ["request", "response", "payload"]
 MANDATORY = ["request", "response"]
-JSON_CHARS = '}{:,"'
+JSON_CHARS = '}{:,"]['
 METHOD_POS = 2  # if leading slash in doc example, method name will be in second chunk of request
 
 
@@ -22,14 +22,15 @@ class MethodNotImplemented(Response):
         super().__init__('MethodNotImplemented', status=404)
 
 
-class URLArgumentError(Response):
+class URLArgumentError(Response, Exception):
     def __init__(self, expected, actual):
         super().__init__(f'wrong number of args, expected: {expected}, actual: {actual}', status=404)
 
 
-class FailResponse(Response):
-    def __init__(self, reason):
-        super().__init__(reason, status=FAIL_CODE)
+class FailResponse(Response, Exception):
+    def __init__(self, reason, status = None):
+        Response().__init__(reason, status = status if status is None else FAIL_CODE)
+
 
 
 class ExpectedRequest:
@@ -43,6 +44,7 @@ class ExpectedRequest:
         self.actualResponse = None
         self.actualPayload = None
         self.actualCase = None
+        self.trailing_slash = True
 
         for i in self.cases:
             case = self.cases.get(i)
@@ -60,21 +62,27 @@ class ExpectedRequest:
         method = uri.split('/')[METHOD_POS]
         return method
 
-    @staticmethod
-    def getcasefrompath(uri):
-        method = f'/{"/".join(uri.split("/")[1:])}/'
+    def getcasefrompath(self, uri):
+        parts = list(filter(lambda item: len(item) > 0, uri.split("/")))[1:]
+        method = f'/{"/".join(parts)}'
+        if self.trailing_slash and len(parts) > 2:
+            method = method + '/'
         return method
 
-    def handleRequest(self, requestContext: Request):
-        self.actualPayload = requestContext.json if 'json' in requestContext.mimetype else None
-        self.actualResponse = None
-        self.actualCase = self.getcasefrompath(requestContext.path)
-        self.actualMethod = requestContext.method
+    def handleRequest(self):
+        global request
+        self.actualPayload = request.json() if 'json' in request.mimetype else None
+        self.actualCase = self.getcasefrompath(request.path)
+        self.actualMethod = request.method
 
-        assert (requestContext.method in self.methods and f'{self.actualCase} had invalid method usage, \
-               actual was: {requestContext.method}, expected: {self.methods}' or IGNORE_FAILS)
-        self._request()
-        self._payload()
+        assert (request.method in self.methods and f'{self.actualCase} had invalid method usage, \
+               actual was: {request.method}, expected: {self.methods}' or IGNORE_FAILS)
+        try:
+            self._request()
+            self._payload()
+        except (FailResponse, URLArgumentError) as e:
+            return e
+
         return self._response()
 
     def handleTest(self, case):
@@ -95,19 +103,28 @@ class ExpectedRequest:
 
         if self.actualMethod not in self.methods:
             return FailResponse('wrong method')
-        type = 'text' if all(c not in self.actualResponse for c in JSON_CHARS) else 'json'
-        res = Response(self.actualResponse, status=200, mimetype=type)
-        if self.isMock:
+        type = 'text' if any(c in self.cases.get(self.actualCase)['response'] for c in JSON_CHARS) else 'json'
+        res = Response(self.cases.get(self.actualCase)['response'], status=200, mimetype=f'application/{type}')
+        if not self.isMock:
             assert (type == res.mimetype and f'wrong mimetype returned \
                     \n  expected: {type}\nactual: {res.mimetype}' or IGNORE_FAILS)
-            assert (res.json == self.actualResponse.json() and f'repsonse was invalid. \
+            assert (res.json() == self.actualResponse.json() and f'repsonse was invalid. \
                     \n  expected: {json.dumps(res.json(), indent=4)}\nactual: {json.dumps(self.actualResponse.json(), indent=4)}'
                     or IGNORE_FAILS)
             return
         return res
 
     def _payload(self):
-        payload = self.cases.get(self.actualCase).get('payload')
+        try:
+            case = self.cases[self.actualCase]
+        except:
+            logging.warning(f'{self.actualCase} not found')
+            assert (f'{self.actualCase} not found' and False or IGNORE_FAILS)
+            raise FailResponse(f'{self.actualCase} not found')
+        if case.get('payload') is None:
+            return
+
+        payload = case.get('payload')
         logging.info(f'received payload to endpoint {self.actualCase}: {json.dumps(self.actualPayload)}')
         assert (self.actualPayload.keys() == payload.keys() and f'body of request {self.actualCase} was malformed. \
                 \nactual: {json.dumps(request.json())}\nexpected: {json.dumps(payload)}' or IGNORE_FAILS)
@@ -220,9 +237,10 @@ class MockedMethod:
     #   return f'{self.__class__.__name__}: {self.expectedRequest.methods}, \
     #           cases: {json.dumps(self.expectedRequest.cases, indent=4)}'
 
-    def runMethod(self, req: Request):
+    def runMethod(self, req: Request, trailng_slash):
         self.expectedRequest = DocumentationTest.generate(self.method)
-        return self.expectedRequest.handleRequest(req)
+        self.expectedRequest.trailing_slash = trailng_slash
+        return self.expectedRequest.handleRequest()
 
 
 def MockFactory(service, app):
@@ -259,6 +277,6 @@ def MockFactory(service, app):
             compare = len(action.argspec.args) - 1 if 'self' in action.argspec.args else len(action.argspec.args)
             if compare != len(args):
                 return URLArgumentError(actual=list(args.values()), expected=action.argspec)
-            return action.runMethod(request)
+            return action.runMethod(request, trailng_slash=service.trailing_slash)
 
     return MockService(app)
