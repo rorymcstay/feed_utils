@@ -60,10 +60,15 @@ class ExpectedRequest:
         method = uri.split('/')[METHOD_POS]
         return method
 
+    @staticmethod
+    def getcasefrompath(uri):
+        method = f'/{"/".join(uri.split("/")[1:])}/'
+        return method
+
     def handleRequest(self, requestContext: Request):
         self.actualPayload = requestContext.json if 'json' in requestContext.mimetype else None
         self.actualResponse = None
-        self.actualCase = self.getmethodfrompath(requestContext.path)
+        self.actualCase = self.getcasefrompath(requestContext.path)
         self.actualMethod = requestContext.method
 
         assert (requestContext.method in self.methods and f'{self.actualCase} had invalid method usage, \
@@ -245,7 +250,7 @@ def MockFactory(service, app):
             self.actions.update({methodName: method})
             logging.debug(f'mocked method on uri: {methodName} with {method}')
 
-        def _runMethod(self, *args):
+        def _runMethod(self, **args):
             uri = request.path
             action = self.actions.get(ExpectedRequest.getmethodfrompath(uri))
             logging.debug(f'running mocked method on uri: {uri} with {action}')
@@ -253,7 +258,7 @@ def MockFactory(service, app):
                 return FailResponse('no action')
             compare = len(action.argspec.args) - 1 if 'self' in action.argspec.args else len(action.argspec.args)
             if compare != len(args):
-                return URLArgumentError(actual=args, expected=action.argspec)
+                return URLArgumentError(actual=list(args.values()), expected=action.argspec)
             return action.runMethod(request)
 
     return MockService(app)

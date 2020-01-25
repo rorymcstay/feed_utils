@@ -1,9 +1,9 @@
 #distributing
 
-##build package:
+##build package (from venv):
     python setup.py sdist bdist_wheel
 
-##upload package:
+##upload package (from sys):
     python3 -m twine upload dist/*
 
 ##RoadMap
