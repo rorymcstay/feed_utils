@@ -1,11 +1,15 @@
+import docker
 import inspect
 import json
 import logging
 import re
-from inspect import getfullargspec
+from inspect import getfullargspec, getsource
 from json import JSONDecodeError
 from typing import List, Dict
 from flask import Flask, Response, request, Request
+import unittest
+from unittest import TestCase
+import requests as r
 
 NOT_IMPLEMENTED = 509
 WRONG_NUMBER_ARGS = 510
@@ -85,16 +89,13 @@ class ExpectedRequest:
 
         return self._response()
 
-    def handleTest(self, case):
-        self._response(case, actual={})
-
     def _request(self):
         action = self.cases.get(self.actualCase)
         if action is None:
             return FailResponse(
                 f'specific scenario not found actual: {self.actualCase}, expected one of: {self.cases.keys()}')
 
-    def _response(self, actual=None):
+    def _response(self, testCase: TestCase, actual=None):
         # TODO actual is for the a test runner for testing the class given the documentation and not mocking
         caseDetails = self.cases.get(self.actualCase)
         if caseDetails is None:
@@ -103,14 +104,13 @@ class ExpectedRequest:
 
         if self.actualMethod not in self.methods:
             return FailResponse('wrong method')
-        type = 'text' if any(c in self.cases.get(self.actualCase)['response'] for c in JSON_CHARS) else 'json'
+        mimetype = 'text' if any(c in self.cases.get(self.actualCase)['response'] for c in JSON_CHARS) else 'json'
         res = Response(self.cases.get(self.actualCase)['response'], status=200, mimetype=f'application/{type}')
         if not self.isMock:
-            assert (type == res.mimetype and f'wrong mimetype returned \
-                    \n  expected: {type}\nactual: {res.mimetype}' or IGNORE_FAILS)
-            assert (res.json() == self.actualResponse.json() and f'repsonse was invalid. \
-                    \n  expected: {json.dumps(res.json(), indent=4)}\nactual: {json.dumps(self.actualResponse.json(), indent=4)}'
-                    or IGNORE_FAILS)
+            testCase.assertEqual(mimetype, res.mimetype, msg=f'wrong mimetype returned \
+                    \n  expected: {type}\nactual: {res.mimetype}')
+            testCase.assertEqual(res.json(), self.actualResponse.json(), msg=f'repsonse was invalid. \
+                    \n  expected: {json.dumps(res.json(), indent=4)}\nactual: {json.dumps(self.actualResponse.json(), indent=4)}')
             return
         return res
 
@@ -130,6 +130,18 @@ class ExpectedRequest:
                 \nactual: {json.dumps(request.json())}\nexpected: {json.dumps(payload)}' or IGNORE_FAILS)
 
 
+class TestClass(TestCase):
+    def __init__(self, actual, expected):
+        super(TestCase, self).__init__()
+        self.actual = actual
+        self.expected = expected
+
+    def test_json(self):
+        self.assertListEqual(self.actual.keys(), self.expected.keys())
+
+    def test_text(self):
+        TestCase.assertEquals(self, self.actual, self.expected)
+
 class DocumentationTest:
     _itemsregex = re.compile(f'(#{":|#".join(TEST_CLAUSES)}:)')
     _nameRegex = re.compile('<.*/>')
@@ -138,6 +150,16 @@ class DocumentationTest:
     def __init__(self, func: callable):
         self.name = func
         self.source = str(func.__doc__)
+
+    def run(self, self2):
+        for i in self.getNames():
+            clauses = self.getTestClauses(i)
+            req = clauses.get('request').split('/')[1]
+            res = self.name(self2, *req)
+            if isinstance(res, Response):
+                if res.mimetype == 'application/json':
+                    test = TestClass(res.json(), clauses.get('response'))
+                    test.run()
 
     @staticmethod
     def _testCaseRegex(name):
@@ -242,6 +264,10 @@ class MockedMethod:
         self.expectedRequest.trailing_slash = trailng_slash
         return self.expectedRequest.handleRequest()
 
+def getPublicMethods(service) -> List[str]:
+    return [method for method in filter(lambda method: callable(getattr(service, method)) and '_' not in method,
+                                     dir(service))]
+
 
 def MockFactory(service, app):
     class MockService(service):
@@ -262,7 +288,7 @@ def MockFactory(service, app):
                 params = "/".join([f'<{pname}>' for pname in args[0][1:]])
                 self._mockMethod(method)
                 self.app.add_url_rule(f'/{service.get_route_base()}/{method}/{params}', method, self._runMethod)
-
+            print(self.app.url_map)
         def _mockMethod(self, methodName: str):
             method = MockedMethod(getattr(service, methodName))
             self.actions.update({methodName: method})
@@ -280,3 +306,35 @@ def MockFactory(service, app):
             return action.runMethod(request, trailng_slash=service.trailing_slash)
 
     return MockService(app)
+
+def makeTestCase(method):
+    def test_case(self):
+        expectedRequest = DocumentationTest.generate(getattr(service, method))
+        for case in expectedRequest.cases:
+            method = expectedRequest.methods[0]
+            req = r.request(method, f'http://localhost:{self.runningOn}/{case}',
+                            json=expectedRequest.cases.get(case).get('payload'))
+            expectedRequest._response(self, req)
+    return test_case
+
+def TestFactory(service, runningOn: str):
+
+    class TestSuite(TestCase):
+        methods = getPublicMethods(service)
+        def __init__(self):
+            self.runningOn = runningOn
+            for method in self.methods:
+                print( f'test_{method}')
+                setattr(self, f'test_{method}', makeTestCase(method))
+            super().__init__()
+    return TestSuite
+
+def init_mongo():
+    client = docker.from_env()
+    client.containers.run("config_data", network=os.getenv("NETWORK", "feed_default"))
+
+if __name__ == "__main__":
+    from ui_server.src.main.feedmanager import FeedManager
+    testSuite = TestFactory(FeedManager, 5000)
+    testSuite.test_getParameter()
+

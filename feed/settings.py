@@ -1,5 +1,7 @@
 import os
 
+# service params
+
 kafka_params = {
     "bootstrap_servers": [os.getenv("KAFKA_ADDRESS", "localhost:29092")],
 }
@@ -11,19 +13,6 @@ browser_params = {
     "base": os.getenv('BROWSER_BASE_PORT', 4444),
     "max": os.getenv("MAX_FEEDS", 10),
     "base_port": os.getenv("BROWSER_BASE_PORT", 4444)
-}
-
-routing_params = {
-    "host": os.getenv("ROUTER_HOST", "localhost"),
-    "port": os.getenv("FLASK_PORT", 5002),
-    "api_prefix": "routingcontroller"
-}
-
-nanny_params = {
-    "host": os.getenv("NANNY_HOST", "localhost"),
-    "port": os.getenv("FLASK_PORT", 5003),
-    "api_prefix": "containercontroller",
-    "params_manager": "parametercontroller"
 }
 
 hazelcast_params = {
@@ -40,9 +29,51 @@ mongo_params = {
 database_parameters = {
     "host": os.getenv("DATABASE_HOST", "localhost"),
     "port": os.getenv("DATABASE_PORT", 5432),
-    "database": os.getenv("DATABASE_NAME", "postgres"),
-    "user": os.getenv("DATABASE_USER", "postgres"),
+    "database": os.getenv("DATABASE_NAME", "feeds"),
+    "user": os.getenv("DATABASE_USER", "feeds"),
     "password": os.getenv("DATABASE_PASS", "postgres"),
+}
+
+
+########################
+# COMPONENT Connectivity
+# defaults to localhost for local debugging
+# ports here should match up with the development.yml for exposing ports
+
+ui_server_params = {
+    "host": os.getenv('UISERVER_HOST', 'localhost'),
+    "port": os.getenv('UISERVER_PORT', 5004) # ui-server
+    }
+nanny_params = {
+    "host": os.getenv("NANNY_HOST", "localhost"),
+    "port": os.getenv("FLASK_PORT", 5003), # nanny
+    "api_prefix": "containercontroller",
+    "params_manager": "parametercontroller"
+}
+
+routing_params = {
+    "host": os.getenv("ROUTER_HOST", "localhost"),
+    "port": os.getenv("FLASK_PORT", 5002), # routing
+    "api_prefix": "routingcontroller"
+}
+
+persistence_params = {
+    "host": os.getenv("PERST_HOST", "localhost"),
+    "port": os.getenv("FLASK_PORT", 5006) # persistence
+}
+
+summarizer_params = {
+    "host": os.getenv("SUMMARIZER_HOST", "localhost"),
+    "port": os.getenv("FLASK_PORT", 5005) # summarizer
+}
+########################
+
+
+# settings
+
+retry_params = {
+    "times": 10,
+    "wait": 10
 }
 
 feed_params = {
@@ -51,10 +82,6 @@ feed_params = {
     "base_port": int(os.getenv("LEADER_BASE_PORT", 9000))
 }
 
-retry_params = {
-    "times": 10,
-    "wait": 10
-}
 
 class BrowserConstants:
     CONTAINER_TIMEOUT = int(os.getenv('CONTAINER_TIMEOUT', 10))
