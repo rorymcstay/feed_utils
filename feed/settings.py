@@ -66,6 +66,11 @@ summarizer_params = {
     "host": os.getenv("SUMMARIZER_HOST", "localhost"),
     "port": os.getenv("FLASK_PORT", 5005) # summarizer
 }
+
+command_params = {
+    "host": os.getenv("COMMANDS_HOST", "localhost"),
+    "port": os.getenv("FLASK_PORT", 5001) # commands
+}
 ########################
 
 

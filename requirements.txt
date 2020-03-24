@@ -1,5 +1,6 @@
 selenium
 bs4
+feed_utils=0.1.6
 requests
 flask-classy
 flask
