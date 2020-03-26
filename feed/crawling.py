@@ -1,4 +1,4 @@
-import logging as log
+from feed.logger import getLogger
 import os
 import sys
 import traceback
@@ -16,7 +16,7 @@ import requests
 from feed.settings import nanny_params, browser_params
 from feed.service import Client
 
-logging = log.getLogger(__name__)
+logging = getLogger(__name__)
 
 
 class CrawlerException(Exception):
@@ -41,6 +41,8 @@ class BrowserService:
         """
 
         port = requests.get(getContainerUrl)
+        self.getContainerUrl = getContainerUrl
+        self.driver_url = ''
         try:
             if not 100 < port.status_code < 400:
                 logging.warning(f'nanny returned with {port.status_code}, response was {port.text}')
@@ -54,30 +56,38 @@ class BrowserService:
                 # => different host
                 if browser_params['host'] is None:
                     url = f'http://worker-{self.port}:{browser_params["internal_port"]}/wd/hub'
+                    logging.info(f'browser host is not set, using {url}')
                 else:
                     # otherwise always localhost
                     url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
-
-                logging.info(f'Starting remote webdriver with {url}')
-                options = Options()
-                options.add_argument("--headless")
-                self.startWebdriverSession(url, options)
+                    logging.info(f'browser host is set, using {url}')
+                self.driver_url = url
+                logging.info(f'Starting remote webdriver with {self.driver_url}')
+                self.startWebdriverSession()
         except Exception as e:
             traceback.print_exc()
             if attempts < self.retry_attempts:
                 logging.warning(f'error getting container: {port.text}')
                 sleep(self.retry_wait)
-                self.__init__(attempts=attempts + 1)
+                BrowserService.__init__(self, attempts=attempts + 1)
             else:
                 logging.error(f'could connect to {getContainerUrl}')
                 sys.exit()
         logging.info(f'success')
 
-    def startWebdriverSession(self, url, options):
-        self.driver = webdriver.Remote(command_executor=url,
+    def startWebdriverSession(self):
+        options = Options()
+        options.add_argument("--headless")
+        logging.info(f'starting webdriver session with {url}')
+        self.driver = webdriver.Remote(command_executor=self.driver_url,
                                        desired_capabilities=DesiredCapabilities.CHROME,
                                        options=options)
         logging.info("started webdriver session")
+
+    def renewWebCrawler(self):
+        logging.info(f'renewing webcrawler')
+        self.driver.quit()
+        self.startWebdriverSession()
 
 
 def reportParameter(parameter_key=None):
