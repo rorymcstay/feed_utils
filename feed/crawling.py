@@ -78,7 +78,7 @@ class BrowserService:
     def startWebdriverSession(self):
         options = Options()
         options.add_argument("--headless")
-        logging.info(f'starting webdriver session with {url}')
+        logging.info(f'starting webdriver session with {self.driver_url}')
         self.driver = webdriver.Remote(command_executor=self.driver_url,
                                        desired_capabilities=DesiredCapabilities.CHROME,
                                        options=options)
