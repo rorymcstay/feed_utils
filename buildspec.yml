@@ -1,13 +1,13 @@
 version: 0.2
-env:
-  git-credential-helper: yes
 phases:
   install:
     runtime-versions:
       docker: 18
+    commands:
+      - git config --global credential.helper '!aws codecommit credential-helper $@'
+      - git config --global credential.UseHttpPath true 
   pre_build:
     commands:
-      - git status
       - env
       - echo Logging in to Amazon ECR...
   build:
