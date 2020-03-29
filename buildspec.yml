@@ -1,0 +1,21 @@
+version: 0.2
+env:
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+  pre_build:
+    commands:
+      - git status
+      - env
+      - echo Logging in to Amazon ECR...
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $IMAGE_REPOSITORY/$PROJECT_NAME/$COMPONENT .
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - $CODEBUILD_SRC_DIR_platform/scripts/publish-if-release-tag.sh
