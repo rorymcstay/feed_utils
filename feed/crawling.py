@@ -33,7 +33,7 @@ class BrowserService:
     retry_wait = 10
     retry_attempts = 10
 
-    def __init__(self, attempts=0,
+    def __init__(self, attempts=0):
         """
         Request a port of the nanny service and then start a webdriver session
         :param attempts: will recursively try to get a container, do not populate
