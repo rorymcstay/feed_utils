@@ -38,24 +38,13 @@ class BrowserService:
         Request a port of the nanny service and then start a webdriver session
         :param attempts: will recursively try to get a container, do not populate
         """
-        self.getContainerUrl = getContainerUrl
         self.driver_url = ''
-        try:
-            url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
-            logging.info(f'browser host is set, using {url}')
-            self.driver_url = url
-            logging.info(f'Starting remote webdriver with {self.driver_url}')
-            self.startWebdriverSession()
-        except Exception as e:
-            # TODO clean up exception handling
-            traceback.print_exc()
-            if attempts < self.retry_attempts:
-                logging.warning(f'error starting webdriver session : {port.text}')
-                sleep(self.retry_wait)
-                BrowserService.__init__(self, attempts=attempts + 1)
-            else:
-                logging.error(f'could connect to {getContainerUrl}')
-                sys.exit()
+        self.port = browser_params['port']
+        url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
+        logging.info(f'browser host is set, using {url}')
+        self.driver_url = url
+        logging.info(f'Starting remote webdriver with {self.driver_url}')
+        self.startWebdriverSession()
         logging.info(f'success')
 
     def startWebdriverSession(self):

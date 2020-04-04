@@ -10,7 +10,7 @@ browser_params = {
     "internal_port":  4444,
     "host": os.getenv("BROWSER_CONTAINER_HOST", 'localhost'),
     "image": os.getenv('BROWSER_IMAGE', 'selenium/standalone-chrome:3.141.59'),
-    "base": os.getenv('BROWSER_PORT', 4444),
+    "port": os.getenv('BROWSER_PORT', 4444),
     "max": os.getenv("MAX_FEEDS", 10),
     "base_port": os.getenv("BROWSER_BASE_PORT", 4444)
 }
