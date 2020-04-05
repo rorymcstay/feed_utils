@@ -19,15 +19,6 @@ from feed.service import Client
 logging = getLogger(__name__)
 
 
-class CrawlerException(Exception):
-    def __init__(self, port):
-        if all(char.isdigit() for char in port):
-            requests.get("http://{host}:{port}/containercontroller/freeContainer/{sub_port}".format(sub_port=port,
-                                                                                                    **nanny_params))
-        else:
-            sys.exit()
-
-
 class BrowserService:
     driver: WebDriver
     retry_wait = 10
