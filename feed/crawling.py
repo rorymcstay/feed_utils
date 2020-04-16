@@ -53,6 +53,18 @@ class BrowserService:
         self.startWebdriverSession()
 
 
+def beginBrowserThread():
+    def startBrowser():
+        with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
+            for line in process.stderr:
+                logging.info(f'browser starting on pid={browserProcess.pid}')
+
+    browser_thread = threading.Thread(target=startBrowser)
+    browser_thread.daemon = True
+    browser_thread.start()
+    sleep(10)
+    return browser_thread
+
 def reportParameter(parameter_key=None):
     endpoint = "http://{host}:{port}/parametermanager/reportParameter/{}/{}/{}".format(
         os.getenv("NAME"),
