@@ -12,6 +12,8 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
 from urllib3.exceptions import MaxRetryError, ProtocolError
 import requests
+import threading
+import subprocess
 
 from feed.settings import nanny_params, browser_params
 from feed.service import Client
@@ -54,6 +56,7 @@ class BrowserService:
 
 
 def beginBrowserThread():
+    # TODO consume this into BrowserService
     def startBrowser():
         with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
             for line in process.stderr:

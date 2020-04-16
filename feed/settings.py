@@ -39,7 +39,7 @@ database_parameters = {
 
 ui_server_params = {
     "host": os.getenv('UISERVER_HOST', 'localhost'),
-    "port": os.getenv('UISERVER_PORT', 5004) # ui-server
+    "port": os.getenv('FLASK_PORT', 5004) # ui-server
     }
 nanny_params = {
     "host": os.getenv("NANNY_HOST", "localhost"),
