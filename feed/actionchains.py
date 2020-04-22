@@ -1,9 +1,6 @@
 import logging
 
 from selenium.webdriver.remote.webdriver import WebDriver
-from kafka import KafkaProducer, KafkaConsumer
-
-from feed.settings import kafka_params
 
 ReturnTypes = ['text', 'src', 'attr', 'element']
 
@@ -81,6 +78,7 @@ class Action:
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.objectSearchParms.returnType = 'src'
 
     def __dict__(self):
         return dict(actionType='CaptureAction', url=self.url, **self.kwargs)
@@ -90,6 +88,7 @@ class InputAction(Action):
     def __init__(self, inputString, **kwargs):
         super().__init__(**kwargs)
         self.insputString = inputString
+        self.objectSearchParms.returnType = 'element'
 
     def __dict__(self):
         return dict(actionType='InputAction', inputString=self.insputString, **self.kwargs)
@@ -106,6 +105,7 @@ class PublishAction(Action):
 class ClickAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.objectSearchParms.returnType = 'element'
 
     def __dict__(self):
         return dict(actionType='CaptureAction', **self.kwargs)
@@ -119,9 +119,13 @@ ActionTypes = {
 }
 
 BaseActionParams = {
-    "css": None,
-    "xpath": None,
-    "text": None
+    "objectSearchParms": {
+        "css": None,
+        "xpath": None,
+        "text": None,
+        "isSingle": false,
+        "returnType": 'src'
+    }
 }
 
 
@@ -191,7 +195,6 @@ class ActionChain:
             return 'worker-route'
         if isinstance(action, ActionChain):
             return 'leader-route'
-
 
     def rePublish(action, data):
         pass
