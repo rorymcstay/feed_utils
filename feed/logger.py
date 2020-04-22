@@ -11,7 +11,7 @@ logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 def getLogger(name, toFile=False):
     logger = logging.getLogger(name)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -%(message)s')
-    ch.setLevel(os.getenv("LOG_LEVEL", "INFO"))
+    ch.setLevel(os.getenv("LOG_LEVEL", "DEBUG"))
     ch.setFormatter(formatter)
     logger.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
