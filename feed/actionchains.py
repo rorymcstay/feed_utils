@@ -2,7 +2,7 @@ import logging
 
 from selenium.webdriver.remote.webdriver import WebDriver
 
-ReturnTypes = ['text', 'src', 'attr', 'element']
+
 
 
 class ObjectSearchParams():
@@ -13,8 +13,8 @@ class ObjectSearchParams():
         self.text = kwargs.get('text')
         self.text = kwargs.get('class')
         self.isSingle = kwargs.get('isSingle', False)
-        self.returnType = kwargs.get('returnType')
-        self.attribute = kwargs.get('attribute')
+        self.returnType = kwargs.get('returnType', 'src')
+        self.attribute = kwargs.get('attribute', None)
         self.backup = None
 
     def __dict__(self):
@@ -63,7 +63,7 @@ class Action:
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
-        self.objectSearchParms = ObjectSearchParams(**kwargs.get('objectSearchParms'))
+        self.objectSearchParms = ObjectSearchParams(**kwargs)
 
     @staticmethod
     def execute(chain, action):
@@ -94,10 +94,10 @@ class InputAction(Action):
         return dict(actionType='InputAction', inputString=self.insputString, **self.kwargs)
 
 class PublishAction(Action):
-    def __init__(self, url, urlStub, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.url = url
-        self.urlStub = urlStub
+        self.url = kwargs.get('url')
+        self.urlStub = kwargs.get('urlStub')
 
     def __dict__(self):
         return dict(actionType='PublishAction', url=self.url, urlStub=self.urlStub, **self.kwargs)
@@ -110,6 +110,8 @@ class ClickAction(Action):
     def __dict__(self):
         return dict(actionType='CaptureAction', **self.kwargs)
 
+
+ReturnTypes = ['text', 'src', 'attr', 'element']
 
 ActionTypes = {
     "ClickAction": ClickAction,
@@ -135,11 +137,13 @@ class ActionChain:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.name = kwargs.get('name')
-        self.repeating = kwargs.get('repeating')
-
-        for key in kwargs:
-            action = ActionChain.actionFactory(**kwargs.get(key))
-            self.actions.update({key: action})
+        self.startUrl = kwargs.get('startUrl')
+        self.actions = kwargs.get('actions')
+        self.repeating = kwargs.get('isRepeating', True)
+        actionParams = kwargs.get('actions')
+        for order, params in enumerate(actionParams):
+            action = ActionChain.actionFactory(**params)
+            self.actions.update({order: action})
 
     def recoverHistory(self):
         req = requests.get('http://{host}:{port}/routincontroller/getLastPage/{name}'.format(name=self.name, **routing_params))

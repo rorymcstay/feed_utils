@@ -50,9 +50,9 @@ class BrowserActions(ActionChain):
             if link and action.urlStub in link:
                 out.append(link)
                 continue
-            parent = item.findParent(attrs={'href': re.compule(f'{action.urlStub}/*')})
+            parent = item.findParent(attrs={'href': re.compile(f'{action.urlStub}/*')})
             if parents is None:
-                child = item.findChild(attrs={'href': re.compule(f'{action.urlStub}/*')})
+                child = item.findChild(attrs={'href': re.compile(f'{action.urlStub}/*')})
             else:
                 out.append(parent.attrs.get('href'))
                 continue
