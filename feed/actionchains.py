@@ -2,25 +2,26 @@ import logging
 
 from selenium.webdriver.remote.webdriver import WebDriver
 
+from feed.actionchains import ReturnTypes
 
+ActionTypes = {
+    "ClickAction": ClickAction,
+    "InputAction": InputAction,
+    "CaptureAction": CaptureAction,
+    "PublishAction": PublishAction
+}
 
-
-class ObjectSearchParams():
+def ObjectSearchParams:
     def __init__(self, **kwargs):
-        self.kwargs = kwargs
-        self.css = kwargs.get('css')
-        self.xpath = kwargs.get('xpath')
-        self.text = kwargs.get('text')
-        self.text = kwargs.get('class')
+        super().__init__(**kwargs)
         self.isSingle = kwargs.get('isSingle', False)
         self.returnType = kwargs.get('returnType', 'src')
         self.attribute = kwargs.get('attribute', None)
-        self.backup = None
 
     def __dict__(self):
         return self.kwargs
 
-    def verifyResultLength(self, items):
+    def _verifyResultLength(self, items):
         if len(items) == 0:
             return False
         if isSingle and len(items) > 1:
@@ -29,7 +30,23 @@ class ObjectSearchParams():
         else:
             return True
 
-    def returnItem(self, item, driver):
+    def _returnItem(item, driver):
+        raise NotImplementedError
+    def search(item, driver):
+        raise NotImplementedError
+
+
+class BrowserSearchParams(ObjectSearchParams):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.kwargs = kwargs
+        self.css = kwargs.get('css')
+        self.xpath = kwargs.get('xpath')
+        self.text = kwargs.get('text')
+        self.text = kwargs.get('class')
+        self.backup = None
+
+    def _returnItem(self, item, driver: WebDriver):
         if self.returnType == 'text':
             formatted = lambda item: item.text
         elif self.returnType == 'src':
@@ -47,23 +64,27 @@ class ObjectSearchParams():
 
     def search(self, driver: WebDriver):
         ret = driver.find_elements_by_css_selector(self.css)
+        # first try css selector
         if self.verifyResultLength(ret):
             return self.returnItem(item)
         ret = driver.find_elements_by_xpath(self.xpath)
+        # then try xpath
         if self.verifyResultLength(item):
             return self.returnItem(ret)
+        # if one item was meant to be retured, just take first item in list.
+        # TODO: should search backup list with text at this point
         if self.backup:
             return self.returnItem([self.backup[0]])
         else:
+            # TODO brute search with text at this point
             return None
 
 
-class Action:
-    objectSearchParms = ObjectSearchParams()
+class Action(ObjectSearchParams):
 
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.kwargs = kwargs
-        self.objectSearchParms = ObjectSearchParams(**kwargs)
 
     @staticmethod
     def execute(chain, action):
@@ -72,7 +93,7 @@ class Action:
 
     @staticmethod
     def getActionableItem(action, driver):
-        return self.objectSearchParms.search(driver)
+        return self.search(driver)
 
 
 class CaptureAction(Action):
@@ -111,26 +132,6 @@ class ClickAction(Action):
         return dict(actionType='CaptureAction', **self.kwargs)
 
 
-ReturnTypes = ['text', 'src', 'attr', 'element']
-
-ActionTypes = {
-    "ClickAction": ClickAction,
-    "InputAction": InputAction,
-    "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
-}
-
-BaseActionParams = {
-    "objectSearchParms": {
-        "css": None,
-        "xpath": None,
-        "text": None,
-        "isSingle": false,
-        "returnType": 'src'
-    }
-}
-
-
 class ActionChain:
     actions= {}
 
@@ -138,7 +139,6 @@ class ActionChain:
         self.kwargs = kwargs
         self.name = kwargs.get('name')
         self.startUrl = kwargs.get('startUrl')
-        self.actions = kwargs.get('actions')
         self.repeating = kwargs.get('isRepeating', True)
         actionParams = kwargs.get('actions')
         for order, params in enumerate(actionParams):
@@ -162,7 +162,7 @@ class ActionChain:
         pass
 
     """
-    following methods correspon to ActionTypes
+    following methods correspond to module://feed.actiontypes.ActionTypes
     """
     def onClickAction(self, action):
         logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
