@@ -16,32 +16,45 @@ import requests
 import threading
 import subprocess
 
-from feed.settings import nanny_params, browser_params
+from feed.settings import nanny_params, browser_params, routing_params
 from feed.service import Client
 
-from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction
+from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction, Action
 
 logging = getLogger(__name__)
 
 
+
 class BrowserActions(ActionChain):
 
+    class Return:
+        def __init__(self, action, data, current_url, name, *args, **kwargs):
+            logging.info(f'BrowserActions::Return: browser has returned, current_url=[{current_url}], data=[{data}]')
+            self.name = name
+            self.current_url = current_url
+            self.data = data
+            self.action = action
+
     driver = None # type: WebDriver
+
     def __init__(self, driver: WebDriver, *args, **kwargs):
-        #super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+        logging.info(f'BrowserActions::__init__: initialising browser action chain {self.name}')
         self.kwargs = kwargs
         self.driver = driver
 
     def onClickAction(self, action: ClickAction):
-        button: WebElement = Action.getActionableItem(action, self.driver)
+        button: WebElement = action.getActionableItem(action, self.driver)
         button.click()
+        logging.info(f'BrowserActions::onClickAction: css=[{action.css}], xpath=[{action.xpath}]')
 
     def onCaptureAction(self, action: CaptureAction):
-        data = Action.getActionableItem(action, self.driver)
+        data = action.getActionableItem(action, self.driver)
         self.rePublish(key=self.driver.current_url, action=action, data=data)
+        return Return(current_url=self.driver.current_url, name=self.name, action=action, data=data)
 
     def onPublishAction(self, action: PublishAction):
-        data = Action.getActionableItem(action)
+        data = action.getActionableItem(action)
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
         items = soup.findAll(attrs={'class': cls})
@@ -69,16 +82,23 @@ class BrowserActions(ActionChain):
             else:
                 out.append(child.attrs.get('href'))
         self.rePublish(key=self.driver.current_url, action=action,data=out)
+        return Return(current_url=self.driver.current_url, name=self.name, action=action,data=out)
 
-    def onInputAction(action: InputAction):
-        inputField: WebElement = Action.getActionableItem(action, self.driver)
+    def onInputAction(self, action: InputAction):
+        inputField: WebElement = action.getActionableItem(action, self.driver)
         inputField.send_keys(action.inputString)
+        return Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)
 
     def saveHistory(self):
-        requests.put('http://{host}:{port}/routincontroller/getLastPage/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+        requests.put('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
 
-    def initialise(self):
-        self.driver.get(self.recoverHistory())
+    def initialise(self, caller):
+        requests.put('http://{host}:{port}/routingcontroller/initialiseChainHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+        hist = self.recoverHistory()
+        logging.info(f'recovered history for {self.name}, url=[{hist}]')
+        self.driver.get(hist)
+        ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
+        caller.initialiseCallback(ret)
 
 
 class BrowserService:

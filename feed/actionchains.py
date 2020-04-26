@@ -1,19 +1,16 @@
 import logging
-
+import requests
 from selenium.webdriver.remote.webdriver import WebDriver
+import json
+from feed.actiontypes import ReturnTypes
+from feed.settings import kafka_params, routing_params
 
-from feed.actionchains import ReturnTypes
+from kafka import KafkaConsumer, KafkaProducer
 
-ActionTypes = {
-    "ClickAction": ClickAction,
-    "InputAction": InputAction,
-    "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
-}
 
-def ObjectSearchParams:
+class ObjectSearchParams:
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        #super().__init__(**kwargs)
         self.isSingle = kwargs.get('isSingle', False)
         self.returnType = kwargs.get('returnType', 'src')
         self.attribute = kwargs.get('attribute', None)
@@ -24,7 +21,7 @@ def ObjectSearchParams:
     def _verifyResultLength(self, items):
         if len(items) == 0:
             return False
-        if isSingle and len(items) > 1:
+        if self.isSingle and len(items) > 1:
             self.backup = items
             return False
         else:
@@ -58,48 +55,53 @@ class BrowserSearchParams(ObjectSearchParams):
             formatted = lambda item: str(item)
         elif self.returnType == 'attr':
             formatted = lambda element: element.get_attribute(self.attribute)
-        elif self.returnTyp == 'element':
+        elif self.returnType == 'element':
             formatted = lambda item: item
         return list(map(formatted, item)) if len (item) > 1 else formatted(item[0])
 
     def search(self, driver: WebDriver):
         ret = driver.find_elements_by_css_selector(self.css)
         # first try css selector
-        if self.verifyResultLength(ret):
-            return self.returnItem(item)
+        if self._verifyResultLength(ret):
+            logging.debug(f'found element [{ret}] with css')
+            return self._returnItem(ret, driver)
         ret = driver.find_elements_by_xpath(self.xpath)
         # then try xpath
-        if self.verifyResultLength(item):
-            return self.returnItem(ret)
+        if self._verifyResultLength(ret):
+            logging.debug(f'found element [{ret}] with xpath')
+            return self._returnItem(ret, driver)
         # if one item was meant to be retured, just take first item in list.
         # TODO: should search backup list with text at this point
         if self.backup:
-            return self.returnItem([self.backup[0]])
+            logging.debug(f'using element [{ret}] from backup')
+            return self._returnItem([self.backup[0]], driver)
         else:
             # TODO brute search with text at this point
             return None
 
 
-class Action(ObjectSearchParams):
+class Action(BrowserSearchParams):
 
-    def __init__(self, **kwargs):
+    def __init__(self, position, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
+        self.position = position
 
     @staticmethod
     def execute(chain, action):
         actionType = type(action).__name__
-        getattr(chain, f'on{actionType}')()
+        getattr(chain, f'on{actionType}')(action)
 
-    @staticmethod
-    def getActionableItem(action, driver):
-        return self.search(driver)
+    def getActionableItem(self, action, driver):
+        item = self.search(driver)
+        logging.info(f'have item=[{item}], length=[{ 1 if not isinstance(item, list) else len(item)}]')
+        return item
 
 
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.objectSearchParms.returnType = 'src'
+        self.returnType = 'src'
 
     def __dict__(self):
         return dict(actionType='CaptureAction', url=self.url, **self.kwargs)
@@ -109,7 +111,8 @@ class InputAction(Action):
     def __init__(self, inputString, **kwargs):
         super().__init__(**kwargs)
         self.insputString = inputString
-        self.objectSearchParms.returnType = 'element'
+        self.isSingle = True
+        self.returnType = 'element'
 
     def __dict__(self):
         return dict(actionType='InputAction', inputString=self.insputString, **self.kwargs)
@@ -126,11 +129,18 @@ class PublishAction(Action):
 class ClickAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.objectSearchParms.returnType = 'element'
+        self.isSingle = True
+        self.returnType = 'element'
 
     def __dict__(self):
         return dict(actionType='CaptureAction', **self.kwargs)
 
+ActionTypes = {
+    "ClickAction": ClickAction,
+    "InputAction": InputAction,
+    "CaptureAction": CaptureAction,
+    "PublishAction": PublishAction
+}
 
 class ActionChain:
     actions= {}
@@ -142,11 +152,11 @@ class ActionChain:
         self.repeating = kwargs.get('isRepeating', True)
         actionParams = kwargs.get('actions')
         for order, params in enumerate(actionParams):
-            action = ActionChain.actionFactory(**params)
+            action = ActionChain.actionFactory(position=order, actionParams=params)
             self.actions.update({order: action})
 
     def recoverHistory(self):
-        req = requests.get('http://{host}:{port}/routincontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
+        req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
         data = req.json()
         return data.get('url')
 
@@ -154,11 +164,12 @@ class ActionChain:
         pass
 
     @staticmethod
-    def actionFactory(actionParams):
+    def actionFactory(position, actionParams):
+        logging.info(f'ActionChain::actionFactory: node=[{position}]: {", ".join(map(lambda key: "{}=[{}]".format(key, actionParams[key]), actionParams))}')
         actionConstructor = ActionTypes.get(actionParams.get('actionType'))
-        return actionConstructor(**actionParams)
+        return actionConstructor(position=position, **actionParams)
 
-    def initialise(self):
+    def initialise(self, caller):
         pass
 
     """
@@ -166,25 +177,27 @@ class ActionChain:
     """
     def onClickAction(self, action):
         logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
-        pass
+        raise NotImplementedError
     def onInputAction(self, action):
         logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
-        pass
+        raise NotImplementedError
     def onPublishAction(self, action):
         logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
-        pass
+        raise NotImplementedError
     def onCaptureAction(self, action):
         logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
-        pass
+        raise NotImplementedError
 
-    def execute(self, initialise=True):
+    def execute(self, caller, initialise=True):
         if initialise:
-            self.initialise()
+            self.initialise(caller)
         for i in range(len(self.actions)):
             self.current_pos = i
             action = self.actions.get(i)
             logging.info(f'executing action {type(action).__name__}')
-            Action.execute(self, action)
+            ret = Action.execute(self, action)
+            callBackMethod = getattr(caller, f'on{type(action).__name__}Callback')
+            callBackMethod(caller, ret)
             self.saveHistory()
         if self.repeating:
             self.execute(initialise=False)
@@ -224,16 +237,33 @@ class KafkaActionPublisher(ActionChain):
 
 class ActionChainRunner:
 
+    driver = None
     def __init__(self, implementation, **kwargs):
         self.implementation = implementation
 
     def subscription(self):
         pass
 
+    def onClickActionCalllBack(self, *args, **kwargs):
+        logging.info(f'onClickActionCallback')
+
+    def onInputActionCallback(self, *args, **kwargs):
+        logging.info(f'onInputActionCallback')
+
+    def onPublishActionCallback(self, *args, **kwargs):
+        logging.info(f'onPublishActionCallback')
+
+    def onCaptureActionCallback(self, *args, **kwargs):
+        logging.info(f'onCaptureActionCallback')
+
+    def initialiseCallback(self, *args, **kwargs):
+        logging.info('initialiseCallback')
+
     def main(self):
         for actionChainParams in self.subscription():
-            actionChain = self.implementation(actionChainParams)
-            actionChain.execute()
+            logging.debug(f'implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
+            actionChain = self.implementation(driver=self.driver, **actionChainParams)
+            ret = actionChain.execute(self)
 
 
 class KafkaActionSubscription(ActionChainRunner):
