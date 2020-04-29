@@ -28,10 +28,14 @@ class ChainSession(SessionInterface):
         chainNames = request.path.split("/")
         name = self._chaindefinitions.find_one({'name': {"$in": chainNames}}, projection=["name"])
         if name is None:
-            return self.sessionConstructor(name=None)
+            chainSession = self.sessionConstructor(name=None)
         else:
             logging.info(f'starting session for name=[{name.get("name")}]')
-            return self._open_session(name=name.get('name'))
+            chainSession = self._open_session(name=name.get('name'))
+
+        chainSession.update(chain_db=self._client[os.getenv('SESSION_DATABASE', 'sessions')],
+                            chainDefinition=self._chaindefinitions)
+        return chainSession
 
     def save_session(self, app, request, response):
         if session.modified:
@@ -51,10 +55,38 @@ class ChainSession(SessionInterface):
         # TODO: session id logic
         sess = self._sessioncollection.find_one({'session_id': ChainSession.get_session_id(name)})
         if sess is None:
-            return self.sessionConstructor(name=name)
+            return self.sessionConstructor(name=name, session_id=ChainSession.get_session_id(name))
         else:
             return self.sessionConstructor(**sess)
 
+
+
+
 #TODO    def is_null_session():
+
+def probeMongo(client):
+    try:
+        cl = client.server_info()
+    except ServerSelectionTimeoutError as ex:
+        logging.info(f'trying to connect to mongo with {mongo_params}')
+        return False
+    return True
+
+def init_app(domainImpl):
+
+    app = Flask(__name__)
+
+    app.permanent_session_lifetime = timedelta(days=31)
+    app.secret_key = os.getenv('SECRET_KEY', 'this is supposed to be secret')
+
+    sessionManager = ChainSession(domainImpl)
+
+    while not probeMongo(sessionManager._client):
+        sleep(10)
+
+    app.session_interface = sessionManager
+
+    return app
+
 
 

@@ -1,6 +1,5 @@
 import logging
 import requests
-from selenium.webdriver.remote.webdriver import WebDriver
 import json
 from feed.actiontypes import ReturnTypes
 from feed.settings import kafka_params, routing_params
@@ -43,7 +42,7 @@ class BrowserSearchParams(ObjectSearchParams):
         self.text = kwargs.get('class')
         self.backup = None
 
-    def _returnItem(self, item, driver: WebDriver):
+    def _returnItem(self, item, driver):
         if self.returnType == 'text':
             formatted = lambda item: item.text
         elif self.returnType == 'src':
@@ -59,7 +58,7 @@ class BrowserSearchParams(ObjectSearchParams):
             formatted = lambda item: item
         return list(map(formatted, item)) if len (item) > 1 else formatted(item[0])
 
-    def search(self, driver: WebDriver):
+    def search(self, driver):
         ret = driver.find_elements_by_css_selector(self.css)
         # first try css selector
         if self._verifyResultLength(ret):
@@ -90,21 +89,35 @@ class Action(BrowserSearchParams):
     @staticmethod
     def execute(chain, action):
         actionType = type(action).__name__
-        getattr(chain, f'on{actionType}')(action)
+        try:
+            ret = getattr(chain, f'on{actionType}')(action)
+            logging.debug(f'{actionType} has returned succesfully, name=[{chain.name}], position=[{action.position}]')
+            return ret
+        except Exception as ex:
+            logging.warning(f'{type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
+            return False
+            # TODO Exception reporting callback called here
+            # OnClickException for example
 
     def getActionableItem(self, action, driver):
         item = self.search(driver)
         logging.info(f'have item=[{item}], length=[{ 1 if not isinstance(item, list) else len(item)}]')
         return item
 
+    @staticmethod
+    def get_params():
+        # TODO For UI-Server
+        return []
+
 
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.returnType = 'src'
+        self.data = kwargs.get('data', None)
 
     def __dict__(self):
-        return dict(actionType='CaptureAction', url=self.url, **self.kwargs)
+        return dict(actionType='CaptureAction', **self.kwargs)
 
 class InputAction(Action):
 
@@ -151,6 +164,7 @@ class ActionChain:
         self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
         actionParams = kwargs.get('actions')
+        self.failedChain = False
         for order, params in enumerate(actionParams):
             action = ActionChain.actionFactory(position=order, actionParams=params)
             self.actions.update({order: action})
@@ -176,63 +190,60 @@ class ActionChain:
     following methods correspond to module://feed.actiontypes.ActionTypes
     """
     def onClickAction(self, action):
-        logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
         raise NotImplementedError
     def onInputAction(self, action):
-        logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
         raise NotImplementedError
     def onPublishAction(self, action):
-        logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
         raise NotImplementedError
     def onCaptureAction(self, action):
-        logging.warning(f'{type(self).__name__}::on{type(action).__name__} not implemented')
         raise NotImplementedError
 
     def execute(self, caller, initialise=True):
+        self.failedChain = False
         if initialise:
             self.initialise(caller)
         for i in range(len(self.actions)):
             self.current_pos = i
             action = self.actions.get(i)
             logging.info(f'executing action {type(action).__name__}')
-            ret = Action.execute(self, action)
+            success = Action.execute(self, action)
+            if not success:
+                logging.info(f'Detected failure: actionType={type(action).__name__}, position={i}, name={self.name}. Will go straight to next action. {"Will not re-evaluate" if self.repeating else ""}')
+                self.failedChain = True
+                continue
             callBackMethod = getattr(caller, f'on{type(action).__name__}Callback')
-            callBackMethod(caller, ret)
+            for item in success:
+                callBackMethod(item)
             self.saveHistory()
-        if self.repeating:
-            self.execute(initialise=False)
+        if self.repeating and not self.failedChain:
+            self.execute(caller, initialise=False)
 
     def getRepublishRoute(self, action):
-        if action.objectSearchParms.returnType == 'src' and isinstance(action, CaptureAction):
+        if isinstance(action, CaptureAction):
             return 'summarizer-route'
-        if action.get('trial'):
-            #TODO sample aid for src in ui
-            return f'trialActions/{self.name}/{self.current_pos}'
-        if action.objectSearchParms.returnType == 'attr' and isinstance(action, PublishAction):
+        if isinstance(action, PublishAction):
             return 'worker-route'
         if isinstance(action, ActionChain):
+            # TODO: If publisher wants to invoke a chain to be ran, they should set action to be a new action chain object
             return 'leader-route'
 
-    def rePublish(action, data):
+    def rePublish(self, action, *args, **kwargs):
         pass
+
+
+class KafkaChainPublisher(ActionChain):
+    pass
 
 
 class KafkaActionPublisher(ActionChain):
 
     def __init__(self):
-        self.producer = KafkaProducer(**kafka_params)
+        self.producer = KafkaProducer(**kafka_params, value_serializer=lambda m: bytes(json.dumps(m).encode('utf-8')))
 
-    def rePublish(self, key, action, data):
-        topic = self.getRepublishRoute(action)
-        if isinstance(data, list):
-            i = 0
-            for item in data:
-                i += 1
-                self.producer.send(topic=topic, key=bytes(f'{key}_{i}', 'utf-8'), value=json.dumps(dict(action=action.__dict__(), data=item)).encode('utf-8'))
-            logging.info(f'republished {len(data)} items for {key} for {type(action).__name__} to {topic}')
-        else:
-            self.producer.send(topic=topic, key=bytes(key, 'utf-8'), value=json.dumps(dict(action=action.__dict__(), item=item)).encode('utf-8'))
-            logging.info(f'republished {key} for {type(action).__name__} to {topic}')
+    def rePublish(self, actionReturn):
+        topic = self.getRepublishRoute(actionReturn.action)
+        self.producer.send(topic=topic, value=actionReturn.__dict__())
+        logging.debug(f'republished items for {type(actionReturn.action).__name__} to {topic}')
 
 
 class ActionChainRunner:
@@ -244,7 +255,7 @@ class ActionChainRunner:
     def subscription(self):
         pass
 
-    def onClickActionCalllBack(self, *args, **kwargs):
+    def onClickActionCallback(self, *args, **kwargs):
         logging.info(f'onClickActionCallback')
 
     def onInputActionCallback(self, *args, **kwargs):

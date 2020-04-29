@@ -35,6 +35,9 @@ class BrowserActions(ActionChain):
             self.data = data
             self.action = action
 
+        def __dict__(self):
+            return dict(name=self.name, current_url=self.current_url, data=self.data, action=self.action.__dict__())
+
     driver = None # type: WebDriver
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
@@ -47,11 +50,15 @@ class BrowserActions(ActionChain):
         button: WebElement = action.getActionableItem(action, self.driver)
         button.click()
         logging.info(f'BrowserActions::onClickAction: css=[{action.css}], xpath=[{action.xpath}]')
+        return [Return(current_url=self.driver.current_url, name=self.name, action=action, data=None)]
 
     def onCaptureAction(self, action: CaptureAction):
         data = action.getActionableItem(action, self.driver)
         self.rePublish(key=self.driver.current_url, action=action, data=data)
-        return Return(current_url=self.driver.current_url, name=self.name, action=action, data=data)
+        if not action.isSingle:
+            return [Return(current_url=self.driver.current_url, name=self.name, action=action,data=item) for item in data]
+        else:
+            return [Return(current_url=self.driver.current_url, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
         data = action.getActionableItem(action)
@@ -81,13 +88,18 @@ class BrowserActions(ActionChain):
                 out.append(link)
             else:
                 out.append(child.attrs.get('href'))
-        self.rePublish(key=self.driver.current_url, action=action,data=out)
-        return Return(current_url=self.driver.current_url, name=self.name, action=action,data=out)
+        # TODO should put this into a callback
+        # TODO should republish chain here
+        self.rePublish(key=self.driver.current_url, action=action, data=out)
+        if not action.isSingle:
+            return [Return(current_url=self.driver.current_url, name=self.name, action=action,data=url) for url in out]
+        else:
+            return [Return(current_url=self.driver.current_url, name=self.name, action=action,data=out[0])]
 
     def onInputAction(self, action: InputAction):
         inputField: WebElement = action.getActionableItem(action, self.driver)
         inputField.send_keys(action.inputString)
-        return Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)
+        return [Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
 
     def saveHistory(self):
         requests.put('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
