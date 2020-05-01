@@ -21,8 +21,16 @@ class ChainSession(SessionInterface):
 
         self._client = MongoClient(**mongo_params)
         self.sessionConstructor = sessionType
-        self._sessioncollection = self._client[os.getenv('SESSION_DATABASE', 'sessions')][f'{type(sessionType).__name__}Sessions']
+        logging.info(f'initialise sessionmanager, sessiontype=[{sessionType.__name__}]')
+        self._sessioncollection = self._client[os.getenv('SESSION_DATABASE', 'sessions')][f'{sessionType.__name__}Sessions']
         self._chaindefinitions = self._client[os.getenv('ACTIONCHAIN_DATABASE', 'actionChains')]['actionChainDefinitions']
+
+    def is_null_session(self, sessionObj):
+        if isinstance(sessionObj, self.sessionConstructor) and sessionObj.name:
+            logging.info(f'found null session {sessionObj.name}')
+            return False
+        else:
+            return True
 
     def open_session(self, app, request):
         chainNames = request.path.split("/")
@@ -33,8 +41,8 @@ class ChainSession(SessionInterface):
             logging.info(f'starting session for name=[{name.get("name")}]')
             chainSession = self._open_session(name=name.get('name'))
 
-        chainSession.update(chain_db=self._client[os.getenv('SESSION_DATABASE', 'sessions')],
-                            chainDefinition=self._chaindefinitions)
+        chainSession.update({'chain_db': self._client[os.getenv('SESSION_DATABASE', 'sessions')],
+                             'chainDefinitions': self._chaindefinitions})
         return chainSession
 
     def save_session(self, app, request, response):

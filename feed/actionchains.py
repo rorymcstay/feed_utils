@@ -171,6 +171,7 @@ class ActionChain:
 
     def recoverHistory(self):
         req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
+        logging.info(f'have {req} from routing.')
         data = req.json()
         return data.get('url')
 

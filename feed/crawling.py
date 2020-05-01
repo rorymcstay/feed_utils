@@ -24,6 +24,16 @@ from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, Inpu
 logging = getLogger(__name__)
 
 
+def verifyUrl(url):
+    if url is None:
+        return False
+    if ' ' in url:
+        return False
+    if 'http://' in url or 'https://' in url:
+        return True
+    if 'www' in url:
+        return True
+
 
 class BrowserActions(ActionChain):
 
@@ -105,9 +115,10 @@ class BrowserActions(ActionChain):
         requests.put('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
 
     def initialise(self, caller):
-        requests.put('http://{host}:{port}/routingcontroller/initialiseChainHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
         hist = self.recoverHistory()
         logging.info(f'recovered history for {self.name}, url=[{hist}]')
+        if verifyUrl(url):
+            hist = self.startUrl
         self.driver.get(hist)
         ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
         caller.initialiseCallback(ret)
@@ -144,6 +155,8 @@ class BrowserService:
         logging.info(f'renewing webcrawler')
         self.driver.quit()
         self.startWebdriverSession()
+
+
 
 
 def beginBrowserThread():
