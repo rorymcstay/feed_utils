@@ -107,13 +107,14 @@ class Action(BrowserSearchParams):
     @staticmethod
     def get_params():
         # TODO For UI-Server
-        return []
+        return [self.__dict__().keys()]
 
 
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.returnType = 'src'
+        self.captureName = kwargs['captureName'] # mandatory
         self.data = kwargs.get('data', None)
 
     def __dict__(self):
