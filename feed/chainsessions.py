@@ -26,7 +26,7 @@ class ChainSession(SessionInterface):
         self._chaindefinitions = self._client[os.getenv('ACTIONCHAIN_DATABASE', 'actionChains')]['actionChainDefinitions']
 
     def is_null_session(self, sessionObj):
-        if isinstance(sessionObj, self.sessionConstructor) and sessionObj.name:
+        if sessionObj.name:
             logging.info(f'found null session {sessionObj.name}')
             return False
         else:

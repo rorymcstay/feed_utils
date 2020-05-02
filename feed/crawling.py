@@ -53,6 +53,7 @@ class BrowserActions(ActionChain):
     def __init__(self, driver: WebDriver, *args, **kwargs):
         super().__init__(*args, **kwargs)
         logging.info(f'BrowserActions::__init__: initialising browser action chain {self.name}')
+        requests.get('http://{host}:{port}/routingcontroller/initialiseRoutingSession/{name}'.format(name=self.name, **routing_params))
         self.kwargs = kwargs
         self.driver = driver
 
@@ -117,7 +118,7 @@ class BrowserActions(ActionChain):
     def initialise(self, caller):
         hist = self.recoverHistory()
         logging.info(f'recovered history for {self.name}, url=[{hist}]')
-        if verifyUrl(url):
+        if verifyUrl(hist):
             hist = self.startUrl
         self.driver.get(hist)
         ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)

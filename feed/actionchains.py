@@ -173,7 +173,7 @@ class ActionChain:
         req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
         logging.info(f'have {req} from routing.')
         data = req.json()
-        return data.get('url')
+        return data
 
     def saveHistory(self, url):
         pass
