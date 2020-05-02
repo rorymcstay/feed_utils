@@ -118,9 +118,12 @@ class BrowserActions(ActionChain):
     def initialise(self, caller):
         hist = self.recoverHistory()
         logging.info(f'recovered history for {self.name}, url=[{hist}]')
-        if verifyUrl(hist):
-            hist = self.startUrl
-        self.driver.get(hist)
+        url = hist.get('url')
+        if not verifyUrl(url):
+            logging.info(f'Url was none from router')
+            url= self.startUrl
+        logging.debug(f'going to: {url}')
+        self.driver.get(url)
         ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
         caller.initialiseCallback(ret)
 
