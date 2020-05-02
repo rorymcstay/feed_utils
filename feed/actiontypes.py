@@ -15,6 +15,6 @@ def get_mandatory_params(actionType):
                      ClickAction=[],
                      InputAction=['inputString'],
                      PublishAction=[])
-    return list(set(paramsMap.get('Action') + paramsMap.get(actionType)))
+    return list(set(paramsMap.get('Action') + paramsMap.get(actionType, [])))
 
 
