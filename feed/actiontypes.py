@@ -10,7 +10,7 @@ ActionTypes = [
 
 def get_mandatory_params(actionType):
 
-    paramsMap = dict(Action=["css","xpath","text","isSingle"],
+    paramsMap = dict(Action=["css","xpath","text","isSingle", "actionType"],
                      CaptureAction=['captureName'],
                      ClickAction=[],
                      InputAction=['inputString'],
