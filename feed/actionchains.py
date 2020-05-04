@@ -1,7 +1,9 @@
 import logging
+import traceback
 import requests
 import json
 from feed.actiontypes import ReturnTypes
+from bs4 import BeautifulSoup
 from feed.settings import kafka_params, routing_params
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -72,7 +74,9 @@ class BrowserSearchParams(ObjectSearchParams):
         # if one item was meant to be retured, just take first item in list.
         # TODO: should search backup list with text at this point
         if self.backup:
-            logging.debug(f'using element [{ret}] from backup')
+            for res in filter(lambda item: item.text.upper() == self.text, self.backup):
+                logging.debug(f'using element [{ret}] from backup')
+                return self._returnItem([ret], driver)
             return self._returnItem([self.backup[0]], driver)
         else:
             # TODO brute search with text at this point
@@ -94,6 +98,7 @@ class Action(BrowserSearchParams):
             logging.debug(f'{actionType} has returned succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
         except Exception as ex:
+            traceback.print_exc()
             logging.warning(f'{type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
             return False
             # TODO Exception reporting callback called here
@@ -118,7 +123,7 @@ class CaptureAction(Action):
         self.data = kwargs.get('data', None)
 
     def __dict__(self):
-        return dict(actionType='CaptureAction', **self.kwargs)
+        return dict(**self.kwargs)
 
 class InputAction(Action):
 
@@ -129,7 +134,7 @@ class InputAction(Action):
         self.returnType = 'element'
 
     def __dict__(self):
-        return dict(actionType='InputAction', inputString=self.insputString, **self.kwargs)
+        return dict(inputString=self.insputString, **self.kwargs)
 
 class PublishAction(Action):
     def __init__(self, **kwargs):
@@ -138,16 +143,13 @@ class PublishAction(Action):
         self.urlStub = kwargs.get('urlStub')
 
     def __dict__(self):
-        return dict(actionType='PublishAction', url=self.url, urlStub=self.urlStub, **self.kwargs)
+        return dict(url=self.url, urlStub=self.urlStub, **self.kwargs)
 
 class ClickAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.isSingle = True
         self.returnType = 'element'
-
-    def __dict__(self):
-        return dict(actionType='CaptureAction', **self.kwargs)
 
 ActionTypes = {
     "ClickAction": ClickAction,
