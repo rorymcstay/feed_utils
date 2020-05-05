@@ -1,16 +1,14 @@
 #distributing
 
+1. set ```TWINE_USERNAME``` and ```TWINE_PASSWORD```
+2. do ```./release.sh```
 
-##build package (from venv):
+# testing
+1. run unit tests 
+    
+    python -m unittest feed
 
-python setup.py sdist bdist_wheel
+2. run unit tests in pdb
 
-##upload package (from sys):
+    python -m pdb <test_file_path> <ClassName>.<test_method>
 
-python3 -m twine upload dist/*
-
-##RoadMap
-
-
-1. make generic logger
-2. unit tests and local testing environment

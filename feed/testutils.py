@@ -8,7 +8,7 @@ from json import JSONDecodeError
 from typing import List, Dict
 from flask import Flask, Response, request, Request
 import unittest
-from unittest import TestCase
+from unittest import TestCase, TestSuite
 import requests as r
 
 NOT_IMPLEMENTED = 509
@@ -317,9 +317,10 @@ def makeTestCase(method):
             expectedRequest._response(self, req)
     return test_case
 
+# TODO check 25.3.7.3.1. load_tests Protocol on python docs
 def TestFactory(service, runningOn: str):
 
-    class TestSuite(TestCase):
+    class Case(TestCase):
         methods = getPublicMethods(service)
         def __init__(self):
             self.runningOn = runningOn
@@ -327,7 +328,9 @@ def TestFactory(service, runningOn: str):
                 print( f'test_{method}')
                 setattr(self, f'test_{method}', makeTestCase(method))
             super().__init__()
-    return TestSuite
+    testSuite
+    suite = TestSuite()
+    suite.addTest(suite)
 
 def init_mongo():
     client = docker.from_env()

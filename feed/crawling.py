@@ -8,7 +8,7 @@ import re
 import requests as r
 import selenium.webdriver as webdriver
 from bs4 import BeautifulSoup
-from bs4 import Tag
+from bs4 import Tag, NavigableString
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
@@ -41,7 +41,6 @@ class BrowserActions(ActionChain):
 
     class Return:
         def __init__(self, action: Action, data, current_url, name, *args, **kwargs):
-            logging.info(f'BrowserActions::Return: browser has returned, current_url=[{current_url}], data=[{data}]')
             self.name = name
             self.current_url = current_url
             self.data = data
@@ -59,23 +58,41 @@ class BrowserActions(ActionChain):
         self.kwargs = kwargs
         self.driver = driver
 
-    def _get_button_to_click(self, item, action):
+    @staticmethod
+    def _get_button_to_click(item, action):
         if not isinstance(item, Tag):
+            return item
+        if item.text and item.text.upper() == action.text.upper():
             return item
         logging.info(f'checking Tag with text=[{item.text}]')
         for ch in item.children:
-            print(f'##### {type(ch).__name__} #######')
+            logging.debug(f'##### {type(ch).__name__} #######')
+            if isinstance(ch, NavigableString):
+                ch = BrowserActions._searchNavigableStringForTag(ch, action.text)
+                logging.debug(f'have navigable string')
+                if ch is None:
+                    continue
             if isinstance(ch, Tag):
                 logging.info(f'checking child {ch.text}')
-            but = self._get_button_to_click(ch, action)
+            but = BrowserActions._get_button_to_click(ch, action)
             if but is not None:
                 return but
-        if item.text and item.text.upper() == action.text.upper():
-            return item
         else:
             return None
 
+    @staticmethod
+    def _searchNavigableStringForTag(navString: NavigableString, text):
+        if navString == text:
+            return BeautifulSoup(str(navString))
+        newString = navString.findNextSibling()
+        if newString is not None:
+            BrowserActions._searchNavigableStringForTag(newString, text)
+        else:
+            return None
+
+
     def _verify_class_string(self, item):
+
         if ' ' in item:
             return False
         else:
@@ -86,9 +103,10 @@ class BrowserActions(ActionChain):
         button: WebElement = action.getActionableItem(action, self.driver)
         html_class = button.get_attribute('class')
         if not self._verify_class_string(html_class):
+            logging.debug(f'check {html_class} for {action.css}')
             html_class = list(filter(lambda item: item in action.css, html_class.split(' ')))[0]
         soup = BeautifulSoup(self.driver.page_source)
-        logging.debug(f'will search html with html_class={html_class}')
+        logging.debug(f'will search html with html_class=[{html_class}]')
         items = soup.find_all(attrs={'class': html_class})
         if len(items) < 1:
             logging.debug(f'no items found from html parse')
@@ -99,9 +117,14 @@ class BrowserActions(ActionChain):
                 logging.info(f'found {item}')
                 altButton = self._get_button_to_click(item, action)
                 if altButton and isinstance(altButton, Tag):
-                    buttonId = altButton.get_attribute('id')
-                    button = self.driver.find_element_by_id(buttonId)
-                    break
+                    classNames = altButton.attrs.get('class')
+                    logging.info(f'checking class names, classNames=[{classNames}], len=[{len(classNames)}]')
+                    for className in classNames:
+                        elems = self.driver.find_elements_by_class_name(className)
+                        logging.info(f'found {len(elems)} with className=[{className}]')
+                        if len(elems) == 1:
+                            logging.info(f'found unique button to click with className=[{className}], should only have appeared here once')
+                            button = elems[0]
         logging.info(f'clicking on text={button.text}')
         button.click()
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=None)]
@@ -115,7 +138,7 @@ class BrowserActions(ActionChain):
             return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
-        data = action.getActionableItem(action)
+        data = action.getActionableItem(action, self.driver)
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
         items = soup.findAll(attrs={'class': cls})
@@ -237,3 +260,5 @@ def reportParameter(parameter_key=None):
         **nanny_params
     )
     r.get(endpoint)
+
+

@@ -6,6 +6,7 @@ from feed.actiontypes import ReturnTypes
 from bs4 import BeautifulSoup
 from feed.settings import kafka_params, routing_params
 
+
 from kafka import KafkaConsumer, KafkaProducer
 
 
@@ -36,12 +37,11 @@ class ObjectSearchParams:
 
 class BrowserSearchParams(ObjectSearchParams):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
         self.kwargs = kwargs
         self.css = kwargs.get('css')
         self.xpath = kwargs.get('xpath')
         self.text = kwargs.get('text')
-        self.text = kwargs.get('class')
+        #self.text = kwargs.get('class')
         self.backup = None
 
     def _returnItem(self, item, driver):
@@ -166,7 +166,7 @@ class ActionChain:
         self.name = kwargs.get('name')
         self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
-        actionParams = kwargs.get('actions')
+        actionParams = kwargs.get('actions', [])
         self.failedChain = False
         for order, params in enumerate(actionParams):
             action = ActionChain.actionFactory(position=order, actionParams=params)
