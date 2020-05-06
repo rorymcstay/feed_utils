@@ -17,6 +17,7 @@ from urllib3.exceptions import MaxRetryError, ProtocolError
 import requests
 import threading
 import subprocess
+import signal
 
 from feed.settings import nanny_params, browser_params, routing_params
 from feed.service import Client
@@ -237,9 +238,9 @@ class BrowserKiller:
 
 def beginBrowserThread():
     # TODO consume this into BrowserService
-    def startBrowser():
-        killer = BrowserKiller()
-        with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
+    killer = BrowserKiller()
+    with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
+        def startBrowser():
             for line in process.stderr:
                 logging.info(f'browser starting on pid={process.pid}')
                 if killer.kill_now:
