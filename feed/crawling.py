@@ -213,7 +213,7 @@ class BrowserService:
         """
         args = self.browser_action_cli_args.parse_args()
         if args.start_browser:
-            self._webserver_process = BrwoserService.beginBrowserThread()
+            self._webserver_process = BrowserService.beginBrowserThread()
         self.driver_url = ''
         self.port = browser_params['port']
         url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
