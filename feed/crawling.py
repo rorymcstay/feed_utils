@@ -18,6 +18,7 @@ import requests
 import threading
 import subprocess
 import signal
+import argparse
 
 from feed.settings import nanny_params, browser_params, routing_params
 from feed.service import Client
@@ -40,6 +41,7 @@ def verifyUrl(url):
 
 class BrowserActions(ActionChain):
 
+
     class Return:
         def __init__(self, action: Action, data, current_url, name, *args, **kwargs):
             self.name = name
@@ -53,6 +55,7 @@ class BrowserActions(ActionChain):
     driver = None # type: WebDriver
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
+        self.browser_action_cli_args.parse_args()
         super().__init__(*args, **kwargs)
         logging.info(f'BrowserActions::__init__: initialising browser action chain {self.name}')
         requests.get('http://{host}:{port}/routingcontroller/initialiseRoutingSession/{name}'.format(name=self.name, **routing_params))
@@ -199,11 +202,18 @@ class BrowserService:
     retry_wait = 10
     retry_attempts = 10
 
+    browser_action_cli_args = argparse.ArgumentParser()
+    browser_action_cli_args.add_argument("--start-browser", action='store_true')
+    _webserver_process = None
+
     def __init__(self, attempts=0, *args, **kwargs):
         """
         Request a port of the nanny service and then start a webdriver session
         :param attempts: will recursively try to get a container, do not populate
         """
+        args = self.browser_action_cli_args.parse_args()
+        if args.start_browser:
+            self._webserver_process = BrwoserService.beginBrowserThread()
         self.driver_url = ''
         self.port = browser_params['port']
         url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
@@ -227,31 +237,27 @@ class BrowserService:
         self.driver.quit()
         self.startWebdriverSession()
 
-class BrowserKiller:
-  kill_now = False
-  def __init__(self):
-    signal.signal(signal.SIGINT, self.exit_gracefully)
-    signal.signal(signal.SIGTERM, self.exit_gracefully)
+    @staticmethod
+    def beginBrowserThread():
+        # TODO consume this into BrowserService
+        killer = BrowserKiller()
 
-  def exit_gracefully(self,signum, frame):
-    self.kill_now = True
-
-def beginBrowserThread():
-    # TODO consume this into BrowserService
-    killer = BrowserKiller()
-    with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
-        def startBrowser():
+        def browserLoggingThread(process):
             for line in process.stderr:
                 logging.info(f'browser starting on pid={process.pid}')
-                if killer.kill_now:
-                    logging.info(f'killing browser {process.pid}')
-                    process.kill()
+        with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
+            browser_thread = threading.Thread(target=startBrowser, args=(process,))
+        browser_thread.daemon = True
+        browser_thread.start()
+        sleep(10)
+        return process
 
-    browser_thread = threading.Thread(target=startBrowser)
-    browser_thread.daemon = True
-    browser_thread.start()
-    sleep(10)
-    return browser_thread
+    def _browser_clean_up(self):
+        if self._webserver_process:
+            self._webserver_process.kill()
+
+
+
 
 def reportParameter(parameter_key=None):
     endpoint = "http://{host}:{port}/parametermanager/reportParameter/{}/{}/{}".format(

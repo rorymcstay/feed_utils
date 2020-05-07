@@ -10,6 +10,18 @@ from feed.settings import kafka_params, routing_params
 from kafka import KafkaConsumer, KafkaProducer
 
 
+
+class GracefulKiller:
+    kill_now = False
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self,signum, frame):
+        self.kill_now = True
+
+
+
 class ObjectSearchParams:
     def __init__(self, **kwargs):
         #super().__init__(**kwargs)
@@ -275,10 +287,17 @@ class ActionChainRunner:
         logging.info('initialiseCallback')
 
     def main(self):
+        killer = GracefulKiller()
         for actionChainParams in self.subscription():
+            if killer.kill_now:
+                self.cleanUp()
+                break
             logging.debug(f'implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
             ret = actionChain.execute(self)
+
+    def cleanUp(self):
+        logging.warning(f'ActionChainRunner::cleanUp() No cleanup has been implemented')
 
 
 class KafkaActionSubscription(ActionChainRunner):
