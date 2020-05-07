@@ -240,7 +240,6 @@ class BrowserService:
     @staticmethod
     def beginBrowserThread():
         # TODO consume this into BrowserService
-        killer = BrowserKiller()
 
         def browserLoggingThread(process):
             for line in process.stderr:
