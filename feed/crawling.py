@@ -1,4 +1,5 @@
 from feed.logger import getLogger
+from queue import Queue
 import os
 import sys
 import traceback
@@ -17,7 +18,6 @@ from urllib3.exceptions import MaxRetryError, ProtocolError
 import requests
 import threading
 import subprocess
-import signal
 import argparse
 
 from feed.settings import nanny_params, browser_params, routing_params
@@ -55,7 +55,6 @@ class BrowserActions(ActionChain):
     driver = None # type: WebDriver
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
-        self.browser_action_cli_args.parse_args()
         super().__init__(*args, **kwargs)
         logging.info(f'BrowserActions::__init__: initialising browser action chain {self.name}')
         requests.get('http://{host}:{port}/routingcontroller/initialiseRoutingSession/{name}'.format(name=self.name, **routing_params))
@@ -204,7 +203,7 @@ class BrowserService:
 
     browser_action_cli_args = argparse.ArgumentParser()
     browser_action_cli_args.add_argument("--start-browser", action='store_true')
-    _webserver_process = None
+    browser_process_command_queue = Queue()
 
     def __init__(self, attempts=0, *args, **kwargs):
         """
@@ -213,7 +212,11 @@ class BrowserService:
         """
         args = self.browser_action_cli_args.parse_args()
         if args.start_browser:
-            self._webserver_process = BrowserService.beginBrowserThread()
+            self.browser_monitor_thread = threading.Thread(target=BrowserService.beginBrowserThread, args=(self,))
+            self.browser_monitor_thread.daemon = True
+            self.browser_monitor_thread.start()
+            sleep(10)
+            logging.info(f'{type(self).__name__}::__init__(): Succesfully started browser process')
         self.driver_url = ''
         self.port = browser_params['port']
         url = f'http://{browser_params["host"]}:{self.port}/wd/hub'
@@ -237,23 +240,32 @@ class BrowserService:
         self.driver.quit()
         self.startWebdriverSession()
 
-    @staticmethod
-    def beginBrowserThread():
-        # TODO consume this into BrowserService
+    def _bind_queue_and_log(queue: Queue, log):
+        # zip together the next item on the queue or None and the next log line
+        for i in log:
+            queueItem = next_item = None if queue.empty() else queue.get(block=False)
+            sleep(0.01)
+            yield i, queueItem
 
-        def browserLoggingThread(process):
-            for line in process.stderr:
-                logging.info(f'browser starting on pid={process.pid}')
-        with subprocess.Popen("/opt/bin/start-selenium-standalone.sh", stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
-            browser_thread = threading.Thread(target=startBrowser, args=(process,))
-        browser_thread.daemon = True
-        browser_thread.start()
-        sleep(10)
-        return process
+    def beginBrowserThread(self):
+        logging.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
+        #TODO: turn script name into env var
+        with subprocess.Popen(os.getenv('SELENIUM_PROCESS_SCRIPT',  "/opt/bin/start-selenium-standalone.sh"), stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
+            for line, command in BrowserService._bind_queue_and_log(self.browser_process_command_queue, process.stdout):
+                logging.info(f'BrowserService:: {line}')
+                if command is None:
+                    logging.debug(f'nothing in queue')
+                    continue
+                elif command == 'KILL':
+                    logging.debug(f'have queue item')
+                    logging.info(f'BrowserService::beginBrowserThread(): Killing process {process.id}')
+                    process.kill()
+                    logging.debug(f'monitor thread is {"alive" if self.browser_monitor_thread.is_alive() else "complete"}')
+        logging.info(f'Browser process {process.pid} has been torn down.')
 
     def _browser_clean_up(self):
-        if self._webserver_process:
-            self._webserver_process.kill()
+        logging.info(f'{type(self).__name__}::_browser_clean_up: sending kill command to browser monitor thread')
+        self.browser_process_command_queue.put(blocking=True, item='KILL')
 
 
 

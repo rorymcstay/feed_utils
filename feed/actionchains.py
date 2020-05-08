@@ -5,6 +5,7 @@ import json
 from feed.actiontypes import ReturnTypes
 from bs4 import BeautifulSoup
 from feed.settings import kafka_params, routing_params
+import signal
 
 
 from kafka import KafkaConsumer, KafkaProducer
@@ -49,6 +50,7 @@ class ObjectSearchParams:
 
 class BrowserSearchParams(ObjectSearchParams):
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.kwargs = kwargs
         self.css = kwargs.get('css')
         self.xpath = kwargs.get('xpath')
@@ -73,17 +75,21 @@ class BrowserSearchParams(ObjectSearchParams):
         return list(map(formatted, item)) if len (item) > 1 else formatted(item[0])
 
     def search(self, driver):
-        ret = driver.find_elements_by_css_selector(self.css)
+
         # first try css selector
+        logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with css=[{self.css}]')
+        ret = driver.find_elements_by_css_selector(self.css)
         if self._verifyResultLength(ret):
             logging.debug(f'found element [{ret}] with css')
             return self._returnItem(ret, driver)
-        ret = driver.find_elements_by_xpath(self.xpath)
+
         # then try xpath
+        logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with xpath=[{self.xpath}]')
+        ret = driver.find_elements_by_xpath(self.xpath)
         if self._verifyResultLength(ret):
             logging.debug(f'found element [{ret}] with xpath')
             return self._returnItem(ret, driver)
-        # if one item was meant to be retured, just take first item in list.
+
         # TODO: should search backup list with text at this point
         if self.backup:
             for res in filter(lambda item: item.text.upper() == self.text, self.backup):
@@ -181,8 +187,13 @@ class ActionChain:
         actionParams = kwargs.get('actions', [])
         self.failedChain = False
         for order, params in enumerate(actionParams):
-            action = ActionChain.actionFactory(position=order, actionParams=params)
-            self.actions.update({order: action})
+            try:
+                action = ActionChain.actionFactory(position=order, actionParams=params)
+                self.actions.update({order: action})
+            except KeyError as ex:
+                # TODO: At this point we should pass this onto the user
+                logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
+
 
     def recoverHistory(self):
         req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
@@ -291,6 +302,7 @@ class ActionChainRunner:
         for actionChainParams in self.subscription():
             if killer.kill_now:
                 self.cleanUp()
+                logging.info(f'cleaned up resources')
                 break
             logging.debug(f'implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
