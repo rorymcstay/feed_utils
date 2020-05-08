@@ -1,9 +1,11 @@
 import logging
+import os
 import traceback
 import requests
 import json
+from json.encoder import JSONEncoder
 from feed.actiontypes import ReturnTypes
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from feed.settings import kafka_params, routing_params
 import signal
 
@@ -59,6 +61,7 @@ class BrowserSearchParams(ObjectSearchParams):
         self.backup = None
 
     def _returnItem(self, item, driver):
+        logging.debug(f'returning returnType=[{self.returnType}] type for actionType=[{type(self).__name__}]')
         if self.returnType == 'text':
             formatted = lambda item: item.text
         elif self.returnType == 'src':
@@ -66,12 +69,15 @@ class BrowserSearchParams(ObjectSearchParams):
             soup = BeautifulSoup(driver.page_source)
             out = []
             for cls in classes:
+                logging.debug(f'ObjectSearchParam::_returnItem(): searching for node with attribues, class=[{cls}]')
                 out.extend(soup.findAll(attrs={'class': cls}))
+                item = out
             formatted = lambda item: item
         elif self.returnType == 'attr':
             formatted = lambda element: element.get_attribute(self.attribute)
         elif self.returnType == 'element':
             formatted = lambda item: item
+        logging.debug(f'ObjectSearchParams::_returnItem(): returning {len(item)}.')
         return list(map(formatted, item)) if len (item) > 1 else formatted(item[0])
 
     def search(self, driver):
@@ -80,7 +86,7 @@ class BrowserSearchParams(ObjectSearchParams):
         logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with css=[{self.css}]')
         ret = driver.find_elements_by_css_selector(self.css)
         if self._verifyResultLength(ret):
-            logging.debug(f'found element [{ret}] with css')
+            logging.debug(f'BrowserSearchParams::search(): found elements count=[{len(ret)}], isSingle=[{self.isSingle}] with css')
             return self._returnItem(ret, driver)
 
         # then try xpath
@@ -124,7 +130,7 @@ class Action(BrowserSearchParams):
 
     def getActionableItem(self, action, driver):
         item = self.search(driver)
-        logging.info(f'have item=[{item}], length=[{ 1 if not isinstance(item, list) else len(item)}]')
+        logging.info(f'have num_items=[{ 1 if not isinstance(item, list) else len(item)}]')
         return item
 
     @staticmethod
@@ -136,12 +142,14 @@ class Action(BrowserSearchParams):
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.kwargs.pop('data', None)
+        self.kwargs.pop('src', None)
         self.returnType = 'src'
         self.captureName = kwargs['captureName'] # mandatory
         self.data = kwargs.get('data', None)
 
     def __dict__(self):
-        return dict(**self.kwargs)
+        return dict(data=self.data, **self.kwargs)
 
 class InputAction(Action):
 
@@ -191,6 +199,7 @@ class ActionChain:
                 self.actions.update({order: action})
             except KeyError as ex:
                 # TODO: At this point we should pass this onto the user
+                traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
 
 
@@ -224,6 +233,12 @@ class ActionChain:
     def onCaptureAction(self, action):
         raise NotImplementedError
 
+    def onChainEnd(self):
+        """
+        called after the chaions execute method
+        """
+        logging.info(f'{type(self).__name__}::onChainEnd(): chainName={self.name}')
+
     def execute(self, caller, initialise=True):
         self.failedChain = False
         if initialise:
@@ -231,7 +246,7 @@ class ActionChain:
         for i in range(len(self.actions)):
             self.current_pos = i
             action = self.actions.get(i)
-            logging.info(f'executing action {type(action).__name__}')
+            logging.info(f'ActionChain::execute(): executing action {type(action).__name__}')
             success = Action.execute(self, action)
             if not success:
                 logging.info(f'Detected failure: actionType={type(action).__name__}, position={i}, name={self.name}. Will go straight to next action. {"Will not re-evaluate" if self.repeating else ""}')
@@ -241,8 +256,7 @@ class ActionChain:
             for item in success:
                 callBackMethod(item)
             self.saveHistory()
-        if self.repeating and not self.failedChain:
-            self.execute(caller, initialise=False)
+            self.onChainEnd()
 
     def getRepublishRoute(self, action):
         if isinstance(action, CaptureAction):
@@ -261,15 +275,42 @@ class KafkaChainPublisher(ActionChain):
     pass
 
 
+class ActionReturnSerialiser(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Tag):
+            return str(obj)
+        elif isinstance(obj, Action):
+            return obj.__dict__()
+        else:
+            return super().default(obj)
+
+
 class KafkaActionPublisher(ActionChain):
 
+    flush_rate = os.getenv('PRODUCER_FLUSH_RATE', 30)
     def __init__(self):
-        self.producer = KafkaProducer(**kafka_params, value_serializer=lambda m: bytes(json.dumps(m).encode('utf-8')))
+        self.producer = KafkaProducer(**kafka_params, value_serializer=lambda m: bytes(json.dumps(m, cls=ActionReturnSerialiser).encode('utf-8')))
+        self.messages_out_since_flush = 0
 
     def rePublish(self, actionReturn):
+        self.messages_out_since_flush += 1
         topic = self.getRepublishRoute(actionReturn.action)
-        self.producer.send(topic=topic, value=actionReturn.__dict__())
+        # construct chain parameters to send
+        actionReturn.action.data = actionReturn.data
+        payload = {
+            'actions': [actionReturn.action],
+            'startUrl': actionReturn.current_url,
+            'isRepeating': False,
+            'name': actionReturn.name
+        }
+
+        self.producer.send(topic=topic, value=payload)
         logging.debug(f'republished items for {type(actionReturn.action).__name__} to {topic}')
+        # check to see if we should flush
+        if self.messages_out_since_flush >= self.flush_rate:
+            self.messages_out_since_flush = 0
+            logging.info('KafkaActionSubscription::rePublish: flushing messages')
+            self.producer.flush()
 
 
 class ActionChainRunner:
@@ -293,11 +334,15 @@ class ActionChainRunner:
     def onCaptureActionCallback(self, *args, **kwargs):
         logging.info(f'onCaptureActionCallback')
 
+    def onChainEndCallback(self, chain, chainReturn):
+        logging.info(f'onChainEndCallback')
+
     def initialiseCallback(self, *args, **kwargs):
         logging.info('initialiseCallback')
 
     def main(self):
         killer = GracefulKiller()
+        logging.info(f'{type(self).__name__}::main(): beginning subscription poll of kafka')
         for actionChainParams in self.subscription():
             if killer.kill_now:
                 self.cleanUp()
@@ -306,6 +351,11 @@ class ActionChainRunner:
             logging.debug(f'implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
             ret = actionChain.execute(self)
+            self.onChainEndCallback(actionChain, ret)
+            # should the chain be automatically be re ran from where we are?
+            # this can be disabled in the implementation of onChainEndCallback
+            while actionChain.repeating and not actionChain.failedChain:
+                actionChain.execute(caller=self, initialise=False)
 
     def cleanUp(self):
         logging.warning(f'ActionChainRunner::cleanUp() No cleanup has been implemented')

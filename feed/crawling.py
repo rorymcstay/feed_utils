@@ -4,7 +4,7 @@ import os
 import sys
 import traceback
 from http.client import RemoteDisconnected
-from time import sleep
+from time import sleep, time
 import re
 import requests as r
 import selenium.webdriver as webdriver
@@ -129,7 +129,17 @@ class BrowserActions(ActionChain):
                             logging.info(f'found unique button to click with className=[{className}], should only have appeared here once')
                             button = elems[0]
         logging.info(f'clicking on text={button.text}')
+        clickingFrom = self.driver.current_url
+        clickTime = time()
+        buttonTxt = button.text
         button.click()
+        while ( self.driver.current_url == clickingFrom ) and (time() - clickTime <= 5):
+            sleep(0.5)
+            if self.driver.current_url == clickingFrom:
+                logging.debug(f'{type(self).__name__}::onClickAction(): current url has not changed from clicking on {buttonTxt}')
+            else:
+                logging.debug(f'{type(self).__name__}::onClickAction(): current url has changed from {clickingFrom} to {self.driver.current_url}')
+        logging.info(f'{type(self).__name__}::onClickAction(): current url has changed from {clickingFrom} to {self.driver.current_url}')
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=None)]
 
     def onCaptureAction(self, action: CaptureAction):
@@ -261,7 +271,6 @@ class BrowserService:
 
     def beginBrowserThread(self):
         logging.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
-        #TODO: turn script name into env var
         with subprocess.Popen(os.getenv('SELENIUM_PROCESS_SCRIPT',  "/opt/bin/start-selenium-standalone.sh"), stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
             for line, command in BrowserService._bind_queue_and_log(self.browser_process_command_queue, process.stdout):
                 logging.info(f'BrowserService:: {line}')
