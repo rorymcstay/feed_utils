@@ -67,7 +67,7 @@ class BrowserSearchParams(ObjectSearchParams):
             out = []
             for cls in classes:
                 out.extend(soup.findAll(attrs={'class': cls}))
-            formatted = lambda item: str(item)
+            formatted = lambda item: item
         elif self.returnType == 'attr':
             formatted = lambda element: element.get_attribute(self.attribute)
         elif self.returnType == 'element':
@@ -157,7 +157,6 @@ class InputAction(Action):
 class PublishAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.url = kwargs.get('url')
         self.urlStub = kwargs.get('urlStub')
 
     def __dict__(self):

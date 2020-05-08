@@ -14,7 +14,7 @@ def get_mandatory_params(actionType):
                      CaptureAction=['captureName'],
                      ClickAction=[],
                      InputAction=['inputString'],
-                     PublishAction=[])
+                     PublishAction=['urlStub'])
     return list(set(paramsMap.get('Action') + paramsMap.get(actionType, [])))
 
 

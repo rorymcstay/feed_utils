@@ -102,7 +102,7 @@ class BrowserActions(ActionChain):
             return True
 
     def onClickAction(self, action: ClickAction):
-        logging.info(f'BrowserActions::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
+        logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         button: WebElement = action.getActionableItem(action, self.driver)
         html_class = button.get_attribute('class')
         if not self._verify_class_string(html_class):
@@ -141,30 +141,44 @@ class BrowserActions(ActionChain):
             return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
+        logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         data = action.getActionableItem(action, self.driver)
+        logging.info(f'have found data=[{len(data)}]')
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
         items = soup.findAll(attrs={'class': cls})
+        out=[]
         for item in items:
+            # try find a link on the top most surface of html
             link = item.attrs.get('href')
             if link and action.urlStub in link:
+                # if it is in this add and continue
                 out.append(link)
                 continue
+            # if failure, then try find a parent with regex
             parent = item.findParent(attrs={'href': re.compile(f'{action.urlStub}/*')})
-            if parents is None:
+            if parent is None:
+                # if nothing found, then try find in children with regex
                 child = item.findChild(attrs={'href': re.compile(f'{action.urlStub}/*')})
             else:
+                # if parent was found then add the link of it and continue
                 out.append(parent.attrs.get('href'))
                 continue
-            if child is None:
-                parentAtag = item.findParent('a')
+            if child is None: # were here because regex on parent was unsuccesful
+                # if link wasn't found in the child then try find a tag of parent
+                parentAtag = item.findParent('a', attrs={'href': re.compile(f'{action.urlStub}/*')})
                 link = ''
                 if parentAtag:
-                    bckup = parentAtag.attrs.get('href')
-                    link = bckup.attrs.get('href')
+                    # if found then take the link
+                    link = parentAtag.attrs.get('href')
                 if not parentAtag or action.urlStub not in link:
-                    bckup = item.findChild('a')
-                    link = bckup.attrs.get('href') if action.urlStub in bckup.attrs.get('href') else None
+                    # if no suitable parent found with a tag or it was wrong, then try the same with the child
+                    bckup = item.findChild('a', attrs={'href': re.compile(f'{action.urlStub}/*')})
+                    if bckup is not None:
+                        link = bckup.attrs.get('href') if action.urlStub in bckup.attrs.get('href') else None
+                # if all un succesful then dont add anything
+                if link == '':
+                    continue
                 out.append(link)
             else:
                 out.append(child.attrs.get('href'))
@@ -202,7 +216,6 @@ class BrowserService:
     retry_attempts = 10
 
     browser_action_cli_args = argparse.ArgumentParser()
-    browser_action_cli_args.add_argument("--start-browser", action='store_true')
     browser_process_command_queue = Queue()
 
     def __init__(self, attempts=0, *args, **kwargs):
@@ -210,8 +223,7 @@ class BrowserService:
         Request a port of the nanny service and then start a webdriver session
         :param attempts: will recursively try to get a container, do not populate
         """
-        args = self.browser_action_cli_args.parse_args()
-        if args.start_browser:
+        if os.getenv('START_BROWSER', False):
             self.browser_monitor_thread = threading.Thread(target=BrowserService.beginBrowserThread, args=(self,))
             self.browser_monitor_thread.daemon = True
             self.browser_monitor_thread.start()

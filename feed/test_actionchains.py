@@ -47,7 +47,7 @@ class TestBrowserActions(TestCase):
         del cls.browserService
 
     def test_onCaptureAction(cls):
-        action = CaptureAction(position=0, captureName='donedeal_test', **{"actionType": "CaptureAction", "css": ".card__body", "xpath": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"card__body\", \" \" ))]", "text": "", "inputString": "Example Search input", "undefined": ""})
+        action = CaptureAction(position=0, captureName='donedeal_test', **{"actionType": "CaptureAction", "css": ".card__body", "xpath": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"card__body\", \" \" ))]", "text": ""})
         cls.actionChain.driver.get("https://www.donedeal.co.uk/cars")
         ret = cls.actionChain.onCaptureAction( action)
         for item in ret:
@@ -56,23 +56,22 @@ class TestBrowserActions(TestCase):
         cls.failIf(len(ret) is 0)
 
     def test_onPublishAction(cls):
-        action = PublishAction(position=0, **{"actionType": "PublishAction", "css": ".card__body", "xpath": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"card__body\", \" \" ))]", 'text': ''})
+        action = PublishAction(position=0, **{"actionType": "PublishAction", "css": ".card__body", "xpath": "//*[contains(concat( \" \", @class, \" \" ), concat( \" \", \"card__body\", \" \" ))]", 'text': '', 'isSingle': False, 'urlStub': 'https://www.donedeal.ie/cars-for-sale'})
         cls.actionChain.driver.get("https://www.donedeal.co.uk/cars")
         ret = cls.actionChain.onPublishAction(action)
         for item in ret:
             cls.failIf('https://' not in ret.data)
+        cls.failIf(len(ret) == 0)
 
     #TODO on input action tests
 
     def test_onClickAction(cls):
         startUrl = "https://www.donedeal.co.uk/cars"
         cls.actionChain.driver.get(startUrl)
-        action = ClickAction(position=0, **{"actionType": "ClickAction", "css": ".ng-isolate-scope", "text": "Next", 'xpath':'//*[contains(concat( " ", @class, " " ), concat( " ", "ng-isolate-scope", " " ))]' })
+        action = ClickAction(position=0, **{"actionType": "ClickAction", "css": ".ng-isolate-scope", "text": "Next", 'xpath':'//*[contains(concat( " ", @class, " " ), concat( " ", "ng-isolate-scope", " " ))]'}) # assumes were clicking on only one thing for the time being
         cls.actionChain.onClickAction(action)
         time.sleep(3)
         cls.assertNotEqual(cls.actionChain.driver.current_url, startUrl)
 
 
-if __name__ == '__main__':
-    unittest.main()
 
