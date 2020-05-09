@@ -24,24 +24,24 @@ crawling.addHandler(sh)
 actions.addHandler(sh)
 
 
-class TestBrowserActions(TestCase, SeleniumTestInterface):
-
+class TestBrowserActions(SeleniumTestInterface):
+    """
     @classmethod
     def setUpClass(cls):
         SeleniumTestInterface.setUpClass(cls)
-
+    """
+    """
     @classmethod
     def tearDownClass(cls):
         SeleniumTestInterface.tearDownClass(cls)
         cls.__container.kill()
+    """
 
     def setUp(cls):
-        SeleniumTestInterface.setUp(cls)
         cls.browserService = BrowserService()
         cls.actionChain = BrowserActions(driver=cls.browserService.driver, **test_action_chain)
 
     def tearDown(cls):
-        SeleniumTestInterface.tearDown(cls)
         cls.browserService.driver.quit()
         del cls.browserService
 
