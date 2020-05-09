@@ -248,6 +248,21 @@ class BrowserService:
         self.startWebdriverSession()
         logging.info(f'success')
 
+    def driverHealthCheck(self):
+        """
+        request the current url from the driver and handle a no active session exception
+        """
+        try:
+            self.driver.current_url
+        # TODO here we should be able to detect if
+        # 1. Session has expired, invalid session id or similiar
+        # 2. process has stopped , we will get a urllib exception
+        # 3. there has been a page crash ' WebDriverException
+        except Exception as ex:
+            logging.warning(f'{type(self).__name__}::driverHealthCheck(): Remote Webdriver session is unhealthy: error=[{type(ex).__name__}], args=[{ex.args}]')
+            return False
+        return True
+
     def startWebdriverSession(self):
         options = Options()
         options.add_argument("--headless")
@@ -262,7 +277,18 @@ class BrowserService:
         self.driver.quit()
         self.startWebdriverSession()
 
+    def renewDriverSession(self):
+        self.renewWebCrawler()
+
+    ###########################
+    # following methods are for 
+    # managing the selenium-st-
+    # andalone-chrom process.
+
     def _bind_queue_and_log(queue: Queue, log):
+        """
+        iterate over next queue item or None and an io stream.
+        """
         # zip together the next item on the queue or None and the next log line
         for i in log:
             queueItem = next_item = None if queue.empty() else queue.get(block=False)
@@ -270,6 +296,9 @@ class BrowserService:
             yield i, queueItem
 
     def beginBrowserThread(self):
+        """
+        open a process, forward its logs and watch for commands in a queue.
+        """
         logging.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
         with subprocess.Popen(os.getenv('SELENIUM_PROCESS_SCRIPT',  "/opt/bin/start-selenium-standalone.sh"), stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
             for line, command in BrowserService._bind_queue_and_log(self.browser_process_command_queue, process.stdout):
@@ -285,6 +314,9 @@ class BrowserService:
         logging.info(f'Browser process {process.pid} has been torn down.')
 
     def _browser_clean_up(self):
+        """
+        place a clean up command to the thread monitoring the selenium process
+        """
         logging.info(f'{type(self).__name__}::_browser_clean_up: sending kill command to browser monitor thread')
         self.browser_process_command_queue.put(blocking=True, item='KILL')
 

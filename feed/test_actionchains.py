@@ -1,19 +1,18 @@
 from unittest import TestCase
 import logging
-import time
 import unittest
-import os
-import docker
+
 from feed.crawling import BrowserService, BrowserActions
 from feed.actionchains import CaptureAction
 from feed.actionchains import CaptureAction, ClickAction, PublishAction, InputAction
+from feed.testinterfaces import SeleniumTestInterface
 
 #from feed.testutils import MockFactory # in order to mock the routing factory we will need the application code
 # other option: build a test image which runs the mock?
 # an environment variable and an image which pulls the application code to a certain version and mocks it?
 
 test_action_chain = {}
-browser_port = os.getenv('BROWSER_PORT', '4444')
+
 
 crawling = logging.getLogger('feed.crawling')
 actions = logging.getLogger('feed.actionchains')
@@ -25,24 +24,24 @@ crawling.addHandler(sh)
 actions.addHandler(sh)
 
 
-class TestBrowserActions(TestCase):
+class TestBrowserActions(TestCase, SeleniumTestInterface):
 
     @classmethod
     def setUpClass(cls):
-        cls.__client = docker.from_env()
-        # TODO should handle creation here
-        cls.__container = cls.__client.containers.run(os.getenv('BROWSER_IMAGE','selenium/standalone-chrome:3.141.59'), ports={'4444/tcp': 4444}, detach=True, remove=True)
-        time.sleep(4)
+        SeleniumTestInterface.setUpClass(cls)
 
     @classmethod
     def tearDownClass(cls):
+        SeleniumTestInterface.tearDownClass(cls)
         cls.__container.kill()
 
     def setUp(cls):
+        SeleniumTestInterface.setUp(cls)
         cls.browserService = BrowserService()
         cls.actionChain = BrowserActions(driver=cls.browserService.driver, **test_action_chain)
 
     def tearDown(cls):
+        SeleniumTestInterface.tearDown(cls)
         cls.browserService.driver.quit()
         del cls.browserService
 
@@ -70,7 +69,6 @@ class TestBrowserActions(TestCase):
         cls.actionChain.driver.get(startUrl)
         action = ClickAction(position=0, **{"actionType": "ClickAction", "css": ".ng-isolate-scope", "text": "Next", 'xpath':'//*[contains(concat( " ", @class, " " ), concat( " ", "ng-isolate-scope", " " ))]'}) # assumes were clicking on only one thing for the time being
         cls.actionChain.onClickAction(action)
-        time.sleep(3)
         cls.assertNotEqual(cls.actionChain.driver.current_url, startUrl)
 
 

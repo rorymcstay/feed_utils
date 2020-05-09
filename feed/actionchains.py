@@ -337,6 +337,12 @@ class ActionChainRunner:
     def onChainEndCallback(self, chain, chainReturn):
         logging.info(f'onChainEndCallback')
 
+    def renewDriverSession(self):
+        pass
+
+    def driverHealthCheck(self):
+        pass
+
     def initialiseCallback(self, *args, **kwargs):
         logging.info('initialiseCallback')
 
@@ -344,6 +350,8 @@ class ActionChainRunner:
         killer = GracefulKiller()
         logging.info(f'{type(self).__name__}::main(): beginning subscription poll of kafka')
         for actionChainParams in self.subscription():
+            if not self.driverHealthCheck():
+                self.renewDriverSession()
             if killer.kill_now:
                 self.cleanUp()
                 logging.info(f'cleaned up resources')
