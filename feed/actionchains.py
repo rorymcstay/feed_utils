@@ -393,3 +393,10 @@ class CommandsActionSubscription(ActionChainRunner):
             action = actionReq.json()
             yield action
 
+
+ActionTypesMap = {
+    "ClickAction": ClickAction,
+    "InputAction": InputAction,
+    "CaptureAction": CaptureAction,
+    "PublishAction": PublishAction
+}

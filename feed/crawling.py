@@ -206,7 +206,7 @@ class BrowserActions(ActionChain):
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
 
     def saveHistory(self):
-        requests.put('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+        requests.get('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
 
     def initialise(self, caller):
         hist = self.recoverHistory()
