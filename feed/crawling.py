@@ -56,7 +56,6 @@ class BrowserActions(ActionChain):
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        logging.info(f'BrowserActions::__init__: initialising browser action chain {self.name}')
         requests.get('http://{host}:{port}/routingcontroller/initialiseRoutingSession/{name}'.format(name=self.name, **routing_params))
         self.kwargs = kwargs
         self.driver = driver
@@ -67,7 +66,7 @@ class BrowserActions(ActionChain):
             return item
         if item.text and item.text.upper() == action.text.upper():
             return item
-        logging.info(f'checking Tag with text=[{item.text}]')
+        logging.debug(f'checking Tag with text=[{item.text}]')
         for ch in item.children:
             logging.debug(f'##### {type(ch).__name__} #######')
             if isinstance(ch, NavigableString):
@@ -76,7 +75,7 @@ class BrowserActions(ActionChain):
                 if ch is None:
                     continue
             if isinstance(ch, Tag):
-                logging.info(f'checking child {ch.text}')
+                logging.debug(f'checking child {ch.text}')
             but = BrowserActions._get_button_to_click(ch, action)
             if but is not None:
                 return but
@@ -105,30 +104,30 @@ class BrowserActions(ActionChain):
         logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         button: WebElement = action.getActionableItem(action, self.driver)
         html_class = button.get_attribute('class')
+        # TODO an action chain should cash there last interaction in the case of a repeat so it does not havbe to do the searching again.
         if not self._verify_class_string(html_class):
-            logging.debug(f'check {html_class} for {action.css}')
+            logging.info(f'{type(self).__name__}::onClickAction: Checking {html_class} for {action.css}')
             html_class = list(filter(lambda item: item in action.css, html_class.split(' ')))[0]
         soup = BeautifulSoup(self.driver.page_source)
-        logging.debug(f'will search html with html_class=[{html_class}]')
+        logging.info(f'will search html with html_class=[{html_class}]')
         items = soup.find_all(attrs={'class': html_class})
         if len(items) < 1:
-            logging.debug(f'no items found from html parse')
+            logging.info(f'{type(self).__name__}::onClickAction: Couldnt find button with class=[{html_class}]')
             pass
         else:
-            logging.debug(f'items found from html parse. count={len(items)}')
+            logging.info(f'{type(self).__name__}::onClickAction: items found from html parse. count={len(items)}')
             for item in items:
-                logging.info(f'found {item}')
                 altButton = self._get_button_to_click(item, action)
                 if altButton and isinstance(altButton, Tag):
                     classNames = altButton.attrs.get('class')
-                    logging.info(f'checking class names, classNames=[{classNames}], len=[{len(classNames)}]')
+                    logging.debug(f'checking class names, classNames=[{classNames}], len=[{len(classNames)}]')
                     for className in classNames:
                         elems = self.driver.find_elements_by_class_name(className)
                         logging.info(f'found {len(elems)} with className=[{className}]')
                         if len(elems) == 1:
-                            logging.info(f'found unique button to click with className=[{className}], should only have appeared here once')
+                            logging.info(f'{type(self).__name__}: found unique button to click with className=[{className}], should only have appeared here once')
                             button = elems[0]
-        logging.info(f'clicking on text={button.text}')
+        logging.info(f'{type(self).__name__}::onClickAction(): clicking on text={button.text}')
         clickingFrom = self.driver.current_url
         clickTime = time()
         buttonTxt = button.text
@@ -136,10 +135,10 @@ class BrowserActions(ActionChain):
         while ( self.driver.current_url == clickingFrom ) and (time() - clickTime <= 5):
             sleep(0.5)
             if self.driver.current_url == clickingFrom:
-                logging.debug(f'{type(self).__name__}::onClickAction(): current url has not changed from clicking on {buttonTxt}')
+                logging.debug(f'{type(self).__name__}::onClickAction(): current url has not changed from clicking on "{buttonTxt}"')
             else:
-                logging.debug(f'{type(self).__name__}::onClickAction(): current url has changed from {clickingFrom} to {self.driver.current_url}')
-        logging.info(f'{type(self).__name__}::onClickAction(): current url has changed from {clickingFrom} to {self.driver.current_url}')
+                logging.debug(f'{type(self).__name__}::onClickAction(): current url has changed from "{clickingFrom}" to "{self.driver.current_url}"')
+            logging.info(f'{type(self).__name__}::onClickAction(): current url has changed from "{clickingFrom}" to "{self.driver.current_url}"')
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=None)]
 
     def onCaptureAction(self, action: CaptureAction):
@@ -151,9 +150,9 @@ class BrowserActions(ActionChain):
             return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
-        logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
+        logging.info(f'{type(self).__name__}::onPublishAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         data = action.getActionableItem(action, self.driver)
-        logging.info(f'have found data=[{len(data)}]')
+        logging.info(f'{type(self).__name__}::onPublishAction: have found data=[{len(data)}]')
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
         items = soup.findAll(attrs={'class': cls})
@@ -165,30 +164,38 @@ class BrowserActions(ActionChain):
                 # if it is in this add and continue
                 out.append(link)
                 continue
+            logging.info(f'{type(self).__name__}::onPublishAction: Link was not immediately available, will try parent')
             # if failure, then try find a parent with regex
             parent = item.findParent(attrs={'href': re.compile(f'{action.urlStub}/*')})
             if parent is None:
                 # if nothing found, then try find in children with regex
                 child = item.findChild(attrs={'href': re.compile(f'{action.urlStub}/*')})
+                logging.info(f'{type(self).__name__}::onPublishAction: Link was not immediately available, will try child')
             else:
                 # if parent was found then add the link of it and continue
+                logging.info(f'{type(self).__name__}::onPublishAction: Found parent link in parent tag.')
                 out.append(parent.attrs.get('href'))
                 continue
-            if child is None: # were here because regex on parent was unsuccesful
-                # if link wasn't found in the child then try find a tag of parent
+            if child is None: # were here because regex on parent was unsuccesful as well as the child
+                # if link wasn't found in the child then try find 'a' tag of parent
+                logging.info(f'{type(self).__name__}::onPublishAction: Link was not found with child, searching parent for a tag')
                 parentAtag = item.findParent('a', attrs={'href': re.compile(f'{action.urlStub}/*')})
                 link = ''
                 if parentAtag:
                     # if found then take the link
+                    logging.info(f'{type(self).__name__}::onPublishAction: Found parent "a" tag.')
                     link = parentAtag.attrs.get('href')
                 if not parentAtag or action.urlStub not in link:
                     # if no suitable parent found with a tag or it was wrong, then try the same with the child
                     bckup = item.findChild('a', attrs={'href': re.compile(f'{action.urlStub}/*')})
+                    logginginfo(f'{type(self).__name__}::onPublishAction: Checking backups for link.')
                     if bckup is not None:
                         link = bckup.attrs.get('href') if action.urlStub in bckup.attrs.get('href') else None
                 # if all un succesful then dont add anything
                 if link == '':
+                    logging.warning(f'{type(self).__name__}::onPublishAction: could not find link to page item for chain=[{self.name}], action=[{action}]')
                     continue
+                logging.info(f'{type(self).__name__}::onPublishAction: Found link=[{link}]. ')
                 out.append(link)
             else:
                 out.append(child.attrs.get('href'))
@@ -203,6 +210,7 @@ class BrowserActions(ActionChain):
     def onInputAction(self, action: InputAction):
         inputField: WebElement = action.getActionableItem(action, self.driver)
         inputField.send_keys(action.inputString)
+        logging.warning(f'{type(self).__name__}::onInputAction: chain=[{self.name}], action=[{action}]')
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
 
     def saveHistory(self):
@@ -210,10 +218,10 @@ class BrowserActions(ActionChain):
 
     def initialise(self, caller):
         hist = self.recoverHistory()
-        logging.info(f'recovered history for {self.name}, url=[{hist}]')
+        logging.info(f'BrowserActions::initialise: recovered history for {self.name}, url=[{hist}]')
         url = hist.get('url')
         if not verifyUrl(url):
-            logging.info(f'Url was none from router')
+            logging.info(f'BrowserActions::initialise: last page url was none from router, response=[{hist}]')
             url= self.startUrl
         logging.debug(f'going to: {url}')
         self.driver.get(url)

@@ -86,14 +86,14 @@ class BrowserSearchParams(ObjectSearchParams):
         logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with css=[{self.css}]')
         ret = driver.find_elements_by_css_selector(self.css)
         if self._verifyResultLength(ret):
-            logging.debug(f'BrowserSearchParams::search(): found elements count=[{len(ret)}], isSingle=[{self.isSingle}] with css')
+            logging.info(f'BrowserSearchParams::search(): found elements count=[{len(ret)}], isSingle=[{self.isSingle}] with css')
             return self._returnItem(ret, driver)
 
         # then try xpath
         logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with xpath=[{self.xpath}]')
         ret = driver.find_elements_by_xpath(self.xpath)
         if self._verifyResultLength(ret):
-            logging.debug(f'found element [{ret}] with xpath')
+            logging.info(f'BrowserSearchParams::search: found element [{ret}] with xpath')
             return self._returnItem(ret, driver)
 
         # TODO: should search backup list with text at this point
@@ -119,18 +119,18 @@ class Action(BrowserSearchParams):
         actionType = type(action).__name__
         try:
             ret = getattr(chain, f'on{actionType}')(action)
-            logging.debug(f'{actionType} has returned succesfully, name=[{chain.name}], position=[{action.position}]')
+            logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
         except Exception as ex:
             traceback.print_exc()
-            logging.warning(f'{type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
+            logging.warning(f'Action::execute:: {type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
             return False
             # TODO Exception reporting callback called here
             # OnClickException for example
 
     def getActionableItem(self, action, driver):
         item = self.search(driver)
-        logging.info(f'have num_items=[{ 1 if not isinstance(item, list) else len(item)}]')
+        logging.info(f'{type(self).__name__}::getActionableItem: have num_items=[{ 1 if not isinstance(item, list) else len(item)}]')
         return item
 
     @staticmethod
@@ -198,15 +198,18 @@ class ActionChain:
                 action = ActionChain.actionFactory(position=order, actionParams=params)
                 self.actions.update({order: action})
             except KeyError as ex:
-                # TODO: At this point we should pass this onto the user
+                # TODO: wAt this point we should pass this onto the user
                 traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
 
 
     def recoverHistory(self):
         req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
-        logging.info(f'have {req} from routing.')
-        data = req.json()
+        logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
+        try:
+            data = req.json()
+        except Exception:
+            logging.warning(f'Did not get valid response from router. response=[{req}]')
         return data
 
     def saveHistory(self, url):
@@ -249,7 +252,7 @@ class ActionChain:
             logging.info(f'ActionChain::execute(): executing action {type(action).__name__}')
             success = Action.execute(self, action)
             if not success:
-                logging.info(f'Detected failure: actionType={type(action).__name__}, position={i}, name={self.name}. Will go straight to next action. {"Will not re-evaluate" if self.repeating else ""}')
+                logging.info(f'{type(self).__name__}::execute(): Detected failure: actionType={type(action).__name__}, position={i}, name={self.name}. Will go straight to next action. {"Will not re-evaluate" if self.repeating else ""}')
                 self.failedChain = True
                 continue
             callBackMethod = getattr(caller, f'on{type(action).__name__}Callback')
@@ -305,7 +308,7 @@ class KafkaActionPublisher(ActionChain):
         }
 
         self.producer.send(topic=topic, value=payload)
-        logging.debug(f'republished items for {type(actionReturn.action).__name__} to {topic}')
+        logging.info(f'{type(self).__name__}::rePublish(): Republished ActionReturn(startUrl={actionReturn.current_url} for {type(actionReturn.action).__name__} to {topic}')
         # check to see if we should flush
         if self.messages_out_since_flush >= self.flush_rate:
             self.messages_out_since_flush = 0
@@ -356,14 +359,15 @@ class ActionChainRunner:
                 self.cleanUp()
                 logging.info(f'cleaned up resources')
                 break
-            logging.debug(f'implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
+            logging.info(f'{type(self).__name__}::main(): START:{actionChain.name} implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             ret = actionChain.execute(self)
             self.onChainEndCallback(actionChain, ret)
             # should the chain be automatically be re ran from where we are?
             # this can be disabled in the implementation of onChainEndCallback
             while actionChain.repeating and not actionChain.failedChain:
                 actionChain.execute(caller=self, initialise=False)
+            logging.info(f'{type(self).__name__}::main(): END:{actionChain.name} ActionChain::execute() has returned')
 
     def cleanUp(self):
         logging.warning(f'ActionChainRunner::cleanUp() No cleanup has been implemented')
