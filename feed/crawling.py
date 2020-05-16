@@ -214,7 +214,11 @@ class BrowserActions(ActionChain):
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
 
     def saveHistory(self):
-        requests.get('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+        try:
+            logging.info(f'BrowserActions::saveHistory: Saving current_url=[{self.driver.current_url}]')
+            requests.get('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+        except Exception as e:
+            logging.warning(f'BrowserActions::saveHistory: router is unavailable.')
 
     def initialise(self, caller):
         hist = self.recoverHistory()

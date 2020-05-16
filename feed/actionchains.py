@@ -204,7 +204,10 @@ class ActionChain:
 
 
     def recoverHistory(self):
-        req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
+        try:
+            req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
+        except Exception as e:
+            logging.warning(f'ActionChain::recoverHistory: router is unavailable')
         logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
         try:
             data = req.json()
