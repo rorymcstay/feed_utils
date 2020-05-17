@@ -22,8 +22,8 @@ class ChainSession(SessionInterface):
         self._client = MongoClient(**mongo_params)
         self.sessionConstructor = sessionType
         logging.info(f'initialise sessionmanager, sessiontype=[{sessionType.__name__}]')
-        self._sessioncollection = self._client[os.getenv('SESSION_DATABASE', 'sessions')][f'{sessionType.__name__}Sessions']
-        self._chaindefinitions = self._client[os.getenv('ACTIONCHAIN_DATABASE', 'actionChains')]['actionChainDefinitions']
+        self._sessioncollection = self._client[os.getenv('CHAIN_DB', 'actionChains')][f'{sessionType.__name__}Sessions']
+        self._chaindefinitions = self._client[os.getenv('CHAIN_DB', 'actionChains')]['actionChainDefinitions']
 
     def is_null_session(self, sessionObj):
         if sessionObj.name:

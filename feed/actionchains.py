@@ -265,13 +265,15 @@ class ActionChain:
             self.onChainEnd()
 
     def getRepublishRoute(self, action):
+        name = 'unknown'
         if isinstance(action, CaptureAction):
-            return 'summarizer-route'
+            name = 'summarizer-route'
         if isinstance(action, PublishAction):
-            return 'worker-route'
+            name = 'worker-route'
         if isinstance(action, ActionChain):
             # TODO: If publisher wants to invoke a chain to be ran, they should set action to be a new action chain object
-            return 'leader-route'
+            name = 'leader-route'
+        return f'{os.getenv("KAFKA_TOPIC_PREFIX", "d")}-{name}'
 
     def rePublish(self, action, *args, **kwargs):
         pass
@@ -381,7 +383,7 @@ class KafkaActionSubscription(ActionChainRunner):
     def __init__(self, topic,  **kwargs):
         super().__init__(**kwargs)
         self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
-        self._consumer.subscribe([topic])
+        self._consumer.subscribe([f'{os.getenv("KAFKA_TOPIC_PREFIX")}-{topic}'])
 
     def subscription(self):
         for mes in self._consumer:
