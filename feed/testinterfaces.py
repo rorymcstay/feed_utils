@@ -15,7 +15,8 @@ class SeleniumTestInterface(TestCase):
     def setUpClass(cls):
         cls.__client = docker.from_env()
         # TODO should handle creation here
-        cls.__container = cls.__client.containers.run(os.getenv('BROWSER_IMAGE','selenium/standalone-chrome:3.141.59'), ports={'4444/tcp': 4444}, detach=True, remove=True)
+        cls.__container = cls.__client.containers.run(os.getenv('BROWSER_IMAGE','selenium/standalone-chrome:3.141.59'),
+                ports={'4444/tcp': 4444}, detach=True, remove=True)
         time.sleep(4)
 
     @classmethod
@@ -29,7 +30,8 @@ class MongoTestInterface(TestCase):
     def setUpClass(cls):
         cls.__client = docker.from_env()
         # TODO should handle creation here
-        cls.__container = cls.__client.containers.run(os.getenv('MONGO_IMAGE','mongo'), ports={'4444/tcp': 4444}, detach=True, remove=True)
+        cls.__container = cls.__client.containers.run(name='mongo', os.getenv('MONGO_IMAGE','mongo'), ports={'27017/tcp': 27017}, detach=True, remove=True,
+                environment=[f'MONGO_INITDB_ROOT_USERNAME={os.environ["MONGO_USER"]}', f'MONGO_INITDB_ROOT_PASSWORD={os.environ["MONGO_PASS"]}'])
         time.sleep(4)
         cls.mongo_client = MongoClient(**mongo_params)
 
