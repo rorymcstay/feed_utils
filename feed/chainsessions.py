@@ -18,10 +18,9 @@ class ChainSession(SessionInterface):
     _client: MongoClient = None
 
     def __init__(self, sessionType):
-
+        logging.info(f'Starting ChainSession mananager with sessionType=[{sessionType.__name__}] and parameters=[{mongo_params}]')
         self._client = MongoClient(**mongo_params)
         self.sessionConstructor = sessionType
-        logging.info(f'initialise sessionmanager, sessiontype=[{sessionType.__name__}]')
         self._sessioncollection = self._client[os.getenv('CHAIN_DB', 'actionChains')][f'{sessionType.__name__}Sessions']
         self._chaindefinitions = self._client[os.getenv('CHAIN_DB', 'actionChains')]['actionChainDefinitions']
 
