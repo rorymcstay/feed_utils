@@ -41,7 +41,7 @@ class ChainSession(SessionInterface):
             logging.info(f'starting session for name=[{name.get("name")}]')
             chainSession = self._open_session(name=name.get('name'))
 
-        chainSession.update({'chain_db': self._client[os.getenv('SESSION_DATABASE', 'sessions')],
+        chainSession.update({'chain_db': self._client[os.getenv('CHAIN_DB', 'sessions')],
                              'chainDefinitions': self._chaindefinitions})
         return chainSession
 
