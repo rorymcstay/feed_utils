@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="feed_utils",
-    version="0.4.0",
+    version="0.4.1",
     author="Rory McStay",
     author_email="rory@rorymcstay.com",
     description="Common code for feed",
