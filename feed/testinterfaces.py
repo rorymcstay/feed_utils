@@ -26,28 +26,28 @@ class SeleniumTestInterface(TestCase):
 
 class KafkaTestInterface(TestCase):
 
-    kafka_env = [
-        "KAFKA_ZOOKEEPER_CONNECT=test_zookeeper:2181",
-        "KAFKA_CREATE_TOPICS=\"sample-queue;worker-queue;worker-route;summarizer-route;leader-route\"",
-        "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
-        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
-        "KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://test_kafka:9092,PLAINTEXT_HOST://localhost:29092",
-        "ALLOW_PLAINTEXT_LISTENER=yes"
-    ]
-    zookeeper_env = [
-        "ZOOKEEPER_CLIENT_PORT=2181",
-        "ALLOW_ANONYMOUS_LOGIN=yes",
-        "ZOOKEEPER_TICK_TIME=2000"
-    ]
 
     @classmethod
     def setUpClass(cls):
+        kafka_env = [
+            "KAFKA_ZOOKEEPER_CONNECT=test_zookeeper:2181",
+            "KAFKA_CREATE_TOPICS=\"sample-queue;worker-queue;worker-route;summarizer-route;leader-route\"",
+            "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1",
+            "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT",
+            "KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://test_kafka:9092,PLAINTEXT_HOST://localhost:29092",
+            "ALLOW_PLAINTEXT_LISTENER=yes"
+        ]
+        zookeeper_env = [
+            "ZOOKEEPER_CLIENT_PORT=2181",
+            "ALLOW_ANONYMOUS_LOGIN=yes",
+            "ZOOKEEPER_TICK_TIME=2000"
+        ]
         cls.__client = docker.from_env()
         cls.__client.images.pull(repository='confluentinc/cp-kafka', tag="latest")
         cls.__client.images.pull(repository='confluentinc/cp-zookeeper', tag="latest")
-        cls.__zookeeper = cls.__client.images.run(image='confluentinc/cp-zookeeper',name='test_kafka', ports={'9092/tcp': 9092,'29092/tcp':29092},
+        cls.__zookeeper = cls.__client.containers.run(image='confluentinc/cp-zookeeper',name='test_kafka', ports={'9092/tcp': 9092,'29092/tcp':29092},
                 environment=zookeeper_env, detach=True, remove=True)
-        cls.__kafka = cls.__client.images.run( image='confluentinc/cp-kafka', name='test_zookeeper', ports={'2181/tcp': 2181},
+        cls.__kafka = cls.__client.containers.run( image='confluentinc/cp-kafka', name='test_zookeeper', ports={'2181/tcp': 2181},
                 environment=kafka_env, detach=True, remove=True)
         # TODO should handle creation here
         time.sleep(10)
@@ -91,30 +91,27 @@ class PostgresTestInterface(TestCase):
 
 def ServiceFactory(component):
 
-    test_ports = {
-        "ui-server": 5004,
-        "nanny": 5003,
-        "routing": 5002
-    }
-    environment = [
-        "DATABASE_HOST=test_database",
-        "DATABASE_PORT=5432",
-        f'DATABASE_USER={os.getenv("DATABASE_USER")}',
-        f'MONGO_HOST=test_mongo:27017',
-        f'KAFKA_ADDRESS=test_kafka:9092',
-        f'MONGO_PASS={os.getenv("MONGO_PASS")}'
-        f'MONGO_USER={os.getenv("MONGO_USER")}'
-        'ROUTER_HOST=test_router',
-        'NANNY_HOST=test_nanny',
-        'FLASK_PORT=5000'
-    ]
-
-
-
-
     class TestInterface(TestCase):
         @classmethod
         def setUpClass(cls):
+            test_ports = {
+                "ui-server": 5004,
+                "nanny": 5003,
+                "routing": 5002
+            }
+            environment = [
+                "DATABASE_HOST=test_database",
+                "DATABASE_PORT=5432",
+                f'DATABASE_USER={os.getenv("DATABASE_USER")}',
+                f'MONGO_HOST=test_mongo:27017',
+                f'KAFKA_ADDRESS=test_kafka:9092',
+                f'MONGO_PASS={os.getenv("MONGO_PASS")}'
+                f'MONGO_USER={os.getenv("MONGO_USER")}'
+                'ROUTER_HOST=test_router',
+                'NANNY_HOST=test_nanny',
+                'FLASK_PORT=5000'
+            ]
+
             versions = {}
             with open(f'{os.getenv("DEPLOYMENT_ROOT")}/etc/manifest.txt', 'r') as manifest:
                 for item in filter(lambda line: line.strip() != '',  manifest.read().split('\n')):

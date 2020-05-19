@@ -1,5 +1,6 @@
 import os
 from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
 from pymongo.database import Database
 from pymongo.collection import Collection
 from datetime import timedelta
@@ -69,7 +70,7 @@ class ChainSession(SessionInterface):
 
 
 
-#TODO    def is_null_session():
+#TODO def is_null_session():
 
 def probeMongo(client):
     try:
@@ -89,7 +90,7 @@ def init_app(domainImpl):
     sessionManager = ChainSession(domainImpl)
 
     while not probeMongo(sessionManager._client):
-        sleep(10)
+        time.sleep(10)
 
     app.session_interface = sessionManager
 

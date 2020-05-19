@@ -9,13 +9,13 @@ phases:
   pre_build:
     commands:
       - env
-      - echo Logging in to Amazon ECR...
+      - echo running tests file
+      - $CODEBUILD_SRC_DIR_platform/scripts/run-unit-tests.sh 
+
   build:
     commands:
-      - echo Build started on `date`
-      - echo Building the Docker image...
-      - docker build -t $IMAGE_REPOSITORY/$PROJECT_NAME/$COMPONENT .
+      - $CODEBUILD_SRC_DIR_platform/scripts/build-and-release-tag.sh
+
   post_build:
     commands:
-      - echo Build completed on `date`
-      - $CODEBUILD_SRC_DIR_platform/scripts/publish-if-release-tag.sh
+
