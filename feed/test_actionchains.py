@@ -25,17 +25,10 @@ actions.addHandler(sh)
 
 
 class TestBrowserActions(SeleniumTestInterface):
-    """
+
     @classmethod
     def setUpClass(cls):
-        SeleniumTestInterface.setUpClass(cls)
-    """
-    """
-    @classmethod
-    def tearDownClass(cls):
-        SeleniumTestInterface.tearDownClass(cls)
-        cls.__container.kill()
-    """
+        SeleniumTestInterface.create()
 
     def setUp(cls):
         cls.browserService = BrowserService()

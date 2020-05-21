@@ -20,7 +20,7 @@ mongo_params = {
     "host": os.getenv("MONGO_HOST", "localhost:27017"),
     "username": os.environ["MONGO_USER"],
     "password": os.environ["MONGO_PASS"],
-    "serverSelectionTimeoutMS": 5
+    "serverSelectionTimeoutMS": 10
 }
 
 database_parameters = {
