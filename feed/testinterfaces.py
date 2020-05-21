@@ -48,7 +48,6 @@ class KafkaTestInterface(TestCase):
             "ALLOW_ANONYMOUS_LOGIN=yes",
             "ZOOKEEPER_TICK_TIME=2000"
         ]
-        cls.__client.images.pull(repository='confluentinc/cp-kafka', tag="latest")
         try:
 
             cls.__zookeeper = cls.__client.containers.run(image='confluentinc/cp-zookeeper',
@@ -59,7 +58,6 @@ class KafkaTestInterface(TestCase):
         except docker.errors.APIError as ex:
             if ex.status_code != 409:
                 raise ex
-        cls.__client.images.pull(repository='confluentinc/cp-zookeeper', tag="latest")
         try:
             cls.__kafka = cls.__client.containers.run(image='confluentinc/cp-kafka',
                                                       name='test_kafka',
@@ -165,7 +163,6 @@ def ServiceFactory(component):
                 versions.update({item.split("=")[0]: item.split('=')[1]})
         serviceVersion = versions.get(component)
         __client = docker.from_env()
-        __client.images.pull(repository=f'{os.getenv("IMAGE_REPOSITORY")}/feed/{component}', tag=serviceVersion)
         # TODO should handle creation here
         try:
             __container = __client.containers.run(f'{os.getenv("IMAGE_REPOSITORY")}/feed/{component}:{serviceVersion}', name=f'test_{component}', ports={f'{test_ports.get(component)}/tcp': 5000}, detach=True, remove=True,
