@@ -89,9 +89,6 @@ def init_app(domainImpl):
 
     sessionManager = ChainSession(domainImpl)
 
-    while not probeMongo(sessionManager._client):
-        time.sleep(10)
-
     app.session_interface = sessionManager
 
     return app

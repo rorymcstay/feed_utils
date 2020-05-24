@@ -81,8 +81,8 @@ class MongoTestInterface:
     @classmethod
     def createMongo(cls):
         cls.__client = docker.from_env()
-        cls.__client.images.pull(repository='mongo', tag="latest")
         # TODO should handle creation here
+        print('Creating mongo image')
         try:
             cls.__mongo = cls.__client.containers.run(name='test_mongo',
                                                       image=os.getenv('MONGO_IMAGE','mongo'),
@@ -90,11 +90,11 @@ class MongoTestInterface:
                                                       detach=True,
                                                       remove=True,
                                                       environment=[f'MONGO_INITDB_ROOT_USERNAME={os.environ["MONGO_USER"]}', f'MONGO_INITDB_ROOT_PASSWORD={os.environ["MONGO_PASS"]}'])
-            time.sleep(3)
+            time.sleep(4)
         except docker.errors.APIError as ex:
             if ex.status_code != 409:
                 raise ex
-        print('created docker image!')
+        print('created docker done!')
 
         cls.mongo_client = MongoClient(**mongo_params)
         cls.mongo_client['actionChains']['actionChainDefinitions'].replace_one({'name': sample_chain.get('name')}, replacement=sample_chain, upsert=True)
