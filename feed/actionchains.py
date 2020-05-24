@@ -325,6 +325,7 @@ class ActionChainRunner:
 
     driver = None
     def __init__(self, implementation, **kwargs):
+        logging.info(f'initiated ActionChainRunner fo {type(implementation).__name__}')
         self.implementation = implementation
 
     def subscription(self):
@@ -382,6 +383,7 @@ class KafkaActionSubscription(ActionChainRunner):
 
     def __init__(self, topic,  **kwargs):
         super().__init__(**kwargs)
+        logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topic=[{topic}]')
         self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
         self._consumer.subscribe([f'{os.getenv("KAFKA_TOPIC_PREFIX")}-{topic}'])
 
