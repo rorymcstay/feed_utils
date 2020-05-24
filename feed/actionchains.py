@@ -273,7 +273,9 @@ class ActionChain:
         if isinstance(action, ActionChain):
             # TODO: If publisher wants to invoke a chain to be ran, they should set action to be a new action chain object
             name = 'leader-route'
-        return f'{os.getenv("KAFKA_TOPIC_PREFIX", "d")}-{name}'
+        route = f'{os.getenv("KAFKA_TOPIC_PREFIX", "d")}-{name}'
+        logging.info(f'republishing to route=[{route}]')
+        return route
 
     def rePublish(self, action, *args, **kwargs):
         pass
@@ -383,11 +385,13 @@ class KafkaActionSubscription(ActionChainRunner):
 
     def __init__(self, topic,  **kwargs):
         super().__init__(**kwargs)
-        logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topic=[{topic}]')
+        logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topic=[{topic}], prefix=[{os.envion["KAFKA_TOPIC_PREFIX"]}]')
         self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
-        self._consumer.subscribe([f'{os.getenv("KAFKA_TOPIC_PREFIX")}-{topic}'])
+        self.topic = f'{os.environ["KAFKA_TOPIC_PREFIX"]}-{topic}'
+
 
     def subscription(self):
+        self._consumer.subscribe([self.topic])
         for mes in self._consumer:
             yield mes.value
 
