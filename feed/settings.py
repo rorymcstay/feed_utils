@@ -18,17 +18,17 @@ browser_params = {
 
 mongo_params = {
     "host": os.getenv("MONGO_HOST", "localhost:27017"),
-    "username": os.environ["MONGO_USER"],
-    "password": os.environ["MONGO_PASS"],
-    "serverSelectionTimeoutMS": 10
+    "username": os.getenv("MONGO_USER", "root"),
+    "password": os.getenv("MONGO_PASS", "root"),
+    "serverSelectionTimeoutMS": 5
 }
 
 database_parameters = {
     "host": os.getenv("DATABASE_HOST", "localhost"),
     "port": os.getenv("DATABASE_PORT", 5432),
-    "database": os.environ["DATABASE_NAME"],
-    "user": os.environ["DATABASE_USER"],
-    "password": os.environ["DATABASE_PASS"],
+    "database": os.getenv("DATABASE_NAME", "feeds"),
+    "user": os.getenv("DATABASE_USER", "feeds"),
+    "password": os.getenv("DATABASE_PASS", "postgres"),
 }
 
 
