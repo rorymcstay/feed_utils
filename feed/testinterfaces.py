@@ -86,7 +86,7 @@ class MongoTestInterface:
         try:
             cls.__mongo = cls.__client.containers.run(name='test_mongo',
                                                       image=os.getenv('MONGO_IMAGE','mongo'),
-                                                      ports={'27016/tcp': 27017},
+                                                      ports={'27017/tcp': 27017},
                                                       detach=True,
                                                       remove=True,
                                                       environment=[f'MONGO_INITDB_ROOT_USERNAME={os.environ["MONGO_USER"]}', f'MONGO_INITDB_ROOT_PASSWORD={os.environ["MONGO_PASS"]}'])
