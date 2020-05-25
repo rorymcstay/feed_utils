@@ -71,14 +71,21 @@ class BrowserSearchParams(ObjectSearchParams):
             for cls in classes:
                 logging.debug(f'ObjectSearchParam::_returnItem(): searching for node with attribues, class=[{cls}]')
                 out.extend(soup.findAll(attrs={'class': cls}))
-                item = out
-            formatted = lambda item: item
+            item = out
+            formatted = lambda it: it
         elif self.returnType == 'attr':
             formatted = lambda element: element.get_attribute(self.attribute)
         elif self.returnType == 'element':
-            formatted = lambda item: item
+            formatted = lambda it: it
         logging.debug(f'ObjectSearchParams::_returnItem(): returning {len(item)}.')
-        return list(map(formatted, item)) if len (item) > 1 else formatted(item[0])
+        retVal = list(map(formatted, item))
+        if len(retVal) == 0:
+            logging.warning(f'No items found for item return for {type(self).__name__}.')
+            return None
+        if len(retVal) == 1:
+            return retVal[0]
+        else:
+            return retVal
 
     def search(self, driver):
 
@@ -107,12 +114,17 @@ class BrowserSearchParams(ObjectSearchParams):
             return None
 
 
+
+
 class Action(BrowserSearchParams):
 
     def __init__(self, position, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
         self.position = position
+
+    def getActionHash(self):
+        return hash(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}:{self.inputString}:{self.text}')
 
     @staticmethod
     def execute(chain, action):
@@ -121,6 +133,10 @@ class Action(BrowserSearchParams):
             ret = getattr(chain, f'on{actionType}')(action)
             logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
+        except ActionChainException as ex:
+            self.publishActionEror(ex)
+            logging.info(f'{type(ex).__name__} thrown whilst processing')
+            return False
         except Exception as ex:
             traceback.print_exc()
             logging.warning(f'Action::execute:: {type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
@@ -137,6 +153,9 @@ class Action(BrowserSearchParams):
     def get_params():
         # TODO For UI-Server
         return [self.__dict__().keys()]
+
+    def publishActionEror(self, actionException):
+        requests.put('http://{host}:{port}/actionsmanager/reportActionError/{name}'.format(name=actionException.chainName, **nanny_params), data=json.dumps(actionException.__dict__()), mimetype='application/json')
 
 
 class CaptureAction(Action):

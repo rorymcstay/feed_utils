@@ -24,6 +24,8 @@ from feed.settings import nanny_params, browser_params, routing_params
 from feed.service import Client
 
 from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction, Action
+from feed.actiontypes import ActionableItemNotFound
+
 
 logging = getLogger(__name__)
 
@@ -102,8 +104,11 @@ class BrowserActions(ActionChain):
 
     def onClickAction(self, action: ClickAction):
         logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
-        button: WebElement = action.getActionableItem(action, self.driver)
-        html_class = button.get_attribute('class')
+        try:
+            button: WebElement = action.getActionableItem(action, self.driver)
+            html_class = button.get_attribute('class')
+        except Exception:
+            raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         # TODO an action chain should cash there last interaction in the case of a repeat so it does not havbe to do the searching again.
         if not self._verify_class_string(html_class):
             logging.info(f'{type(self).__name__}::onClickAction: Checking {html_class} for {action.css}')
@@ -151,7 +156,10 @@ class BrowserActions(ActionChain):
 
     def onPublishAction(self, action: PublishAction):
         logging.info(f'{type(self).__name__}::onPublishAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
-        data = action.getActionableItem(action, self.driver)
+        try:
+            data = action.getActionableItem(action, self.driver)
+        except Exception:
+            raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         logging.info(f'{type(self).__name__}::onPublishAction: have found data=[{len(data)}]')
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
@@ -199,6 +207,8 @@ class BrowserActions(ActionChain):
                 out.append(link)
             else:
                 out.append(child.attrs.get('href'))
+        if len(out) == 0:
+            raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         # TODO should put this into a callback
         # TODO should republish chain here
         self.rePublish(key=self.driver.current_url, action=action, data=out)

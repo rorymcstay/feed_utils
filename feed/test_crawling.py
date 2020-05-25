@@ -10,6 +10,10 @@ from feed.testinterfaces import SeleniumTestInterface
 
 class TestBrowserService(SeleniumTestInterface, TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        cls.createSelenium()
+
     def test_driverHealtCheck(self):
         res = self.browserService.driverHealthCheck()
         self.assertTrue(res)
