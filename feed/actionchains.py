@@ -7,7 +7,8 @@ import json
 from json.encoder import JSONEncoder
 from feed.actiontypes import ReturnTypes
 from bs4 import BeautifulSoup, Tag
-from feed.settings import kafka_params, routing_params
+from feed.settings import kafka_params, routing_params, nanny_params
+from feed.actiontypes import ActionChainException
 import signal
 
 
@@ -125,7 +126,7 @@ class Action(BrowserSearchParams):
         self.position = position
 
     def getActionHash(self):
-        return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}:{self.inputString}:{self.text}')
+        return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}'.encode('utf-8')).hexdigest()
 
     @staticmethod
     def execute(chain, action):
@@ -135,7 +136,7 @@ class Action(BrowserSearchParams):
             logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
         except ActionChainException as ex:
-            self.publishActionEror(ex)
+            Action.publishActionEror(ex)
             logging.info(f'{type(ex).__name__} thrown whilst processing')
             return False
         except Exception as ex:
@@ -155,8 +156,8 @@ class Action(BrowserSearchParams):
         # TODO For UI-Server
         return [self.__dict__().keys()]
 
-    def publishActionEror(self, actionException):
-        requests.put('http://{host}:{port}/actionsmanager/reportActionError/{name}'.format(name=actionException.chainName, **nanny_params), data=json.dumps(actionException.__dict__()), mimetype='application/json')
+    def publishActionEror(actionException):
+        requests.put('http://{host}:{port}/actionsmanager/reportActionError/{name}'.format(name=actionException.chainName, **nanny_params), json=actionException.__dict__())
 
 
 class CaptureAction(Action):

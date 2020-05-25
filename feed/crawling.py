@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.common.exceptions import WebDriverException
 from urllib3.exceptions import MaxRetryError, ProtocolError
 import requests
 import threading
@@ -148,6 +149,8 @@ class BrowserActions(ActionChain):
 
     def onCaptureAction(self, action: CaptureAction):
         data = action.getActionableItem(action, self.driver)
+        if data is None:
+            raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         self.rePublish(key=self.driver.current_url, action=action, data=data)
         if not action.isSingle:
             return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=item) for item in data]
@@ -238,7 +241,14 @@ class BrowserActions(ActionChain):
             logging.info(f'BrowserActions::initialise: last page url was none from router, response=[{hist}]')
             url= self.startUrl
         logging.debug(f'going to: {url}')
-        self.driver.get(url)
+        try:
+            self.driver.get(url)
+        except WebDriverException:
+            logging.warning(f'Webdriver exception on initialisation, will reinitiate web browser')
+            caller.renewDriverSession()
+            self.driver = caller.driver
+            self.driver.get(url)
+
         ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
         caller.initialiseCallback(ret)
 
@@ -340,7 +350,7 @@ class BrowserService:
         place a clean up command to the thread monitoring the selenium process
         """
         logging.info(f'{type(self).__name__}::_browser_clean_up: sending kill command to browser monitor thread')
-        self.browser_process_command_queue.put(blocking=True, item='KILL')
+        self.browser_process_command_queue.put(item='KILL')
 
 
 
