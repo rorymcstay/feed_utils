@@ -1,5 +1,6 @@
 import logging
 import os
+import hashlib
 import traceback
 import requests
 import json
@@ -124,7 +125,7 @@ class Action(BrowserSearchParams):
         self.position = position
 
     def getActionHash(self):
-        return hash(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}:{self.inputString}:{self.text}')
+        return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}:{self.inputString}:{self.text}')
 
     @staticmethod
     def execute(chain, action):
