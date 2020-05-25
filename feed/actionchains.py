@@ -223,7 +223,6 @@ class ActionChain:
                 traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
 
-
     def recoverHistory(self):
         try:
             req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
@@ -388,15 +387,29 @@ class ActionChainRunner:
                 self.cleanUp()
                 logging.info(f'cleaned up resources')
                 break
+            if not self.shouldRun(actionChain):
+                logging.info(f'Skipping {actionChainParams.get("name")}.')
+                # TODO notifications service here
+                continue
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
             logging.info(f'{type(self).__name__}::main(): START:{actionChain.name} implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             ret = actionChain.execute(self)
             self.onChainEndCallback(actionChain, ret)
             # should the chain be automatically be re ran from where we are?
             # this can be disabled in the implementation of onChainEndCallback
-            while actionChain.repeating and not actionChain.failedChain:
-                actionChain.execute(caller=self, initialise=False)
+            while actionChain.repeating and not actionChain.failedChain and self.shouldRun(actionChain):
+                ret = actionChain.execute(caller=self, initialise=False)
+                self.onChainEndCallback(actionChain, ret)
             logging.info(f'{type(self).__name__}::main(): END:{actionChain.name} ActionChain::execute() has returned')
+
+    def shouldRun(self, actionChain: ActionChain):
+        for actionIndex in range(actionChain.actions):
+            logging.debug(f'Checking if {actionIndex} in {actionChain.name} can be run')
+            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=actionChain.name, pos=actionIndex))
+            errors = errorReq.json()
+            if len(errors) > 0:
+                logging.info(f'Will not run {actionChain.name}')
+                return False
 
     def cleanUp(self):
         logging.warning(f'ActionChainRunner::cleanUp() No cleanup has been implemented')

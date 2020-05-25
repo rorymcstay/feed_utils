@@ -19,13 +19,14 @@ def get_mandatory_params(actionType):
 
 class ActionChainException(Exception):
 
-    def __init__(self, position, chainName, actionHash):
+    def __init__(self, position=None, chainName=None, actionHash=None, **kwargs):
         self.position = position
         self.chainName = chainName
         self.actionHash = actionHash
+        self.message = kwargs.get('message', '')
 
     def __dict__(self):
-        return dict(position=self.position, actionHash=self.actionHash, chainName=self.chainName, errorType=type(self).__name__)
+        return dict(position=self.position, actionHash=self.actionHash, chainName=self.chainName, errorType=type(self).__name__, message=self.message)
 
 class ActionableItemNotFound(ActionChainException):
     pass
@@ -33,3 +34,5 @@ class ActionableItemNotFound(ActionChainException):
 class ActionableItemNotInteractable(ActionChainException):
     pass
 
+class NeedsMappingWarning(ActionChainException):
+    pass
