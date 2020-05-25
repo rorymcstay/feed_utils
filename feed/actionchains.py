@@ -126,7 +126,7 @@ class Action(BrowserSearchParams):
         self.position = position
 
     def getActionHash(self):
-        return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}'.encode('utf-8')).hexdigest()
+        return hashlib.md5(f'{self.position}:{self.css}:{self.xpath}'.encode('utf-8')).hexdigest()
 
     @staticmethod
     def execute(chain, action):
