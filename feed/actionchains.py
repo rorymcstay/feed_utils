@@ -252,7 +252,7 @@ class ActionChain:
                 logging.info(f'Will not run {actionChain.name}')
                 return False
 
-   @staticmethod
+    @staticmethod
     def actionFactory(position, actionParams):
         logging.info(f'ActionChain::actionFactory: node=[{position}]: {", ".join(map(lambda key: "{}=[{}]".format(key, actionParams[key]), actionParams))}')
         actionConstructor = ActionTypes.get(actionParams.get('actionType'))
