@@ -197,12 +197,14 @@ class ClickAction(Action):
         self.isSingle = True
         self.returnType = 'element'
 
+
 ActionTypes = {
     "ClickAction": ClickAction,
     "InputAction": InputAction,
     "CaptureAction": CaptureAction,
     "PublishAction": PublishAction
 }
+
 
 class ActionChain:
     actions= {}
@@ -238,7 +240,19 @@ class ActionChain:
     def saveHistory(self, url):
         pass
 
-    @staticmethod
+    def shouldRun(self):
+        logging.debug(f'Checking if {self.name} should run')
+        if self.failedChain:
+            return False
+        for actionIndex in self.actions:
+            logging.debug(f'Checking if {actionIndex} in {actionChain.name} can be run')
+            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=actionChain.name, pos=actionIndex))
+            errors = errorReq.json()
+            if len(errors) > 0:
+                logging.info(f'Will not run {actionChain.name}')
+                return False
+
+   @staticmethod
     def actionFactory(position, actionParams):
         logging.info(f'ActionChain::actionFactory: node=[{position}]: {", ".join(map(lambda key: "{}=[{}]".format(key, actionParams[key]), actionParams))}')
         actionConstructor = ActionTypes.get(actionParams.get('actionType'))
@@ -381,35 +395,31 @@ class ActionChainRunner:
         killer = GracefulKiller()
         logging.info(f'{type(self).__name__}::main(): beginning subscription poll of kafka')
         for actionChainParams in self.subscription():
+            # If shutdown was triggered, then do that now
+            if killer.kill_now:
+                break
             if not self.driverHealthCheck():
                 self.renewDriverSession()
-            if killer.kill_now:
-                self.cleanUp()
-                logging.info(f'cleaned up resources')
-                break
-            if not self.shouldRun(actionChain):
-                logging.info(f'Skipping {actionChainParams.get("name")}.')
+
+            actionChain = self.implementation(driver=self.driver, **actionChainParams)
+            if not actionChain.shouldRun():
+                logging.info(f'Skipping {actionChain.name}.')
                 # TODO notifications service here
                 continue
-            actionChain = self.implementation(driver=self.driver, **actionChainParams)
             logging.info(f'{type(self).__name__}::main(): START:{actionChain.name} implementing action chain {actionChainParams.get("name")}: {json.dumps(actionChainParams, indent=4)}')
             ret = actionChain.execute(self)
             self.onChainEndCallback(actionChain, ret)
             # should the chain be automatically be re ran from where we are?
             # this can be disabled in the implementation of onChainEndCallback
-            while actionChain.repeating and not actionChain.failedChain and self.shouldRun(actionChain):
+            while actionChain.repeating and actionChain.shouldRun():
+                if killer.kill_now:
+                    break
                 ret = actionChain.execute(caller=self, initialise=False)
                 self.onChainEndCallback(actionChain, ret)
+            if killer.kill_now:
+                break
             logging.info(f'{type(self).__name__}::main(): END:{actionChain.name} ActionChain::execute() has returned')
-
-    def shouldRun(self, actionChain: ActionChain):
-        for actionIndex in range(actionChain.actions):
-            logging.debug(f'Checking if {actionIndex} in {actionChain.name} can be run')
-            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=actionChain.name, pos=actionIndex))
-            errors = errorReq.json()
-            if len(errors) > 0:
-                logging.info(f'Will not run {actionChain.name}')
-                return False
+        self.cleanUp()
 
     def cleanUp(self):
         logging.warning(f'ActionChainRunner::cleanUp() No cleanup has been implemented')

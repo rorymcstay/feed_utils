@@ -84,10 +84,28 @@ feed_params = {
     "base_port": int(os.getenv("LEADER_BASE_PORT", 9000))
 }
 
+logger_settings_dict = {
+    'version': 1,
+    'formatters': {'default': {
+        'format': '[%(asctime)s]%(thread)d: %(module)s - %(levelname)s - %(message)s',
+    }},
+    'handlers': {'wsgi': {
+        'class': 'logging.StreamHandler',
+        'stream': 'ext://flask.logging.wsgi_errors_stream',
+        'formatter': 'default'
+    }},
+    'root': {
+        'level': os.getenv("LOG_LEVEL", "INFO"),
+        'handlers': ['wsgi']
+    },
+    'kafka': {
+        'level': os.getenv("KAFKA_LOG_LEVEL", 'INFO')
+    },
+    'urllib3': {
+        'level': os.getenv('URLLIB_LOG_LEVEL', 'WARNING')
+    },
+    'selenium': {
+        'level': os.getenv('SELENIUM_LOG_LEVEL', 'INFO')
+    }
+}
 
-class BrowserConstants:
-    CONTAINER_TIMEOUT = int(os.getenv('CONTAINER_TIMEOUT', 10))
-    CONTAINER_SUCCESS = 'Selenium Server is up and running on port'
-    CONTAINER_QUIT = "Shutdown complete"
-    client_connect = 'wd/hub'
-    worker_timeout = int(os.getenv('WORKER_TIMEOUT', '3'))
