@@ -21,7 +21,7 @@ class Client:
     """
     wait = 10
 
-    def __init__(self, name, attempts=0, **params, check_health=True):
+    def __init__(self, name, attempts=0, check_health=True, **params):
         self.base_route = 'http://{host}:{port}'.format_map(**params)
         self.name = name
         if check_health:
