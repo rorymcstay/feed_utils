@@ -246,10 +246,10 @@ class ActionChain:
             return False
         for actionIndex in self.actions:
             logging.debug(f'Checking if {actionIndex} in {self.name} can be run')
-            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=actionChain.name, pos=actionIndex))
+            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=self.name, pos=actionIndex))
             errors = errorReq.json()
             if len(errors) > 0:
-                logging.info(f'Will not run {actionChain.name}')
+                logging.info(f'Will not run {self.name}')
                 return False
 
     @staticmethod
