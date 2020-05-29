@@ -5,7 +5,7 @@ from pymongo.database import Database
 from pymongo.collection import Collection
 from datetime import timedelta
 from flask.sessions import SessionInterface, SessionMixin
-from flask import Flask, session
+from flask import Flask, session, Request
 import time
 import logging
 from feed.settings import mongo_params
@@ -50,7 +50,8 @@ class ChainSession(SessionInterface):
             self._save_session(session)
 
     @staticmethod
-    def get_session_id(chainName):
+    def get_session_id(request: Request):
+        request.headers.get('userID')
         return "{}-{}".format(chainName, time.strftime("%d_%m"))
 
     def _save_session(self, session):
@@ -66,6 +67,12 @@ class ChainSession(SessionInterface):
             return self.sessionConstructor(name=name, session_id=ChainSession.get_session_id(name))
         else:
             return self.sessionConstructor(**sess)
+
+
+class AuthorisedChainSession(ChainSession):
+
+    def __init__(*args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 
 

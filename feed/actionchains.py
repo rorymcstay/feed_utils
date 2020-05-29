@@ -214,6 +214,7 @@ class ActionChain:
         self.name = kwargs.get('name')
         self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
+        self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
         self.failedChain = False
         for order, params in enumerate(actionParams):
