@@ -6,7 +6,6 @@ import traceback
 from http.client import RemoteDisconnected
 from time import sleep, time
 import re
-import requests as r
 import selenium.webdriver as webdriver
 from bs4 import BeautifulSoup
 from bs4 import Tag, NavigableString
@@ -16,12 +15,11 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import WebDriverException
 from urllib3.exceptions import MaxRetryError, ProtocolError
-import requests
 import threading
 import subprocess
 import argparse
 
-from feed.settings import nanny_params, browser_params, routing_params
+from feed.settings import browser_params
 from feed.service import Client
 
 from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction, Action
@@ -59,7 +57,7 @@ class BrowserActions(ActionChain):
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        requests.get('http://{host}:{port}/routingcontroller/initialiseRoutingSession/{name}'.format(name=self.name, **routing_params))
+        self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
         self.kwargs = kwargs
         self.driver = driver
 
@@ -94,7 +92,6 @@ class BrowserActions(ActionChain):
             BrowserActions._searchNavigableStringForTag(newString, text)
         else:
             return None
-
 
     def _verify_class_string(self, item):
 
@@ -229,7 +226,7 @@ class BrowserActions(ActionChain):
     def saveHistory(self):
         try:
             logging.info(f'BrowserActions::saveHistory: Saving current_url=[{self.driver.current_url}]')
-            requests.get('http://{host}:{port}/routingcontroller/updateHistory/{name}'.format(name=self.name, **routing_params), data=self.driver.current_url)
+            self.routerClient.get(f'/routingcontroller/updateHistory/{self.name}', payload=self.driver.current_url)
         except Exception as e:
             logging.warning(f'BrowserActions::saveHistory: router is unavailable.')
 
@@ -356,12 +353,6 @@ class BrowserService:
 
 
 def reportParameter(parameter_key=None):
-    endpoint = "http://{host}:{port}/parametermanager/reportParameter/{}/{}/{}".format(
-        os.getenv("NAME"),
-        parameter_key,
-        "leader",
-        **nanny_params
-    )
-    r.get(endpoint)
+    pass
 
 

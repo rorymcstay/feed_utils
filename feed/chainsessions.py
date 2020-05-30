@@ -32,14 +32,15 @@ class ChainSession(SessionInterface):
         else:
             return True
 
-    def open_session(self, app, request):
+    def open_session(self, app, request: Request):
         chainNames = request.path.split("/")
-        name = self._chaindefinitions.find_one({'name': {"$in": chainNames}}, projection=["name"])
+        userID = request.headers.get('userId')
+        currentChain = self._chaindefinitions.find_one({'name': {"$in": chainNames}, 'userID': userID}, projection=["name", 'userID'])
         if name is None:
             chainSession = self.sessionConstructor(name=None)
         else:
             logging.info(f'starting session for name=[{name.get("name")}]')
-            chainSession = self._open_session(name=name.get('name'))
+            chainSession = self._open_session(**currentChain)
 
         chainSession.update({'chain_db': self._client[os.getenv('CHAIN_DB', 'actionChains')],
                              'chainDefinitions': self._chaindefinitions})
@@ -50,19 +51,18 @@ class ChainSession(SessionInterface):
             self._save_session(session)
 
     @staticmethod
-    def get_session_id(request: Request):
-        request.headers.get('userID')
-        return "{}-{}".format(chainName, time.strftime("%d_%m"))
+    def get_session_id(chainName):
+        return f'{chainName}-{time.strftime("%d_%m")}'
 
     def _save_session(self, session):
         sessionOut = session.__dict__()
         sessionOut.update({'session_id': ChainSession.get_session_id(session.name)})
-        logging.info(f'saving session for name=[{session.name}]')
+        logging.debug(f'saving sessin for name=[{session.name}], userID=[{session.userID}]')
         self._sessioncollection.replace_one({'session_id': ChainSession.get_session_id(session.name)}, replacement=sessionOut, upsert=True)
 
-    def _open_session(self, name):
+    def _open_session(self, name, userID):
         # TODO: session id logic
-        sess = self._sessioncollection.find_one({'session_id': ChainSession.get_session_id(name)})
+        sess = self._sessioncollection.find_one({'session_id': ChainSession.get_session_id(name), 'userID': userID})
         if sess is None:
             return self.sessionConstructor(name=name, session_id=ChainSession.get_session_id(name))
         else:

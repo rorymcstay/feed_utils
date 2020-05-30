@@ -21,9 +21,11 @@ class Client:
     """
     wait = 10
 
-    def __init__(self, name, attempts=0, check_health=True, **params):
-        self.base_route = 'http://{host}:{port}'.format_map(**params)
+    def __init__(self, name, attempts=0, check_health=True, behalf=None, chainName=None, **params):
+        self.base_route = 'http://{host}:{port}'.format_map(**paraams)
+        self.behalf = behalf
         self.name = name
+        self.chainName = chainName
         if check_health:
             if not self.healthCheck(conn_attempts=5):
                 logging.error(f'Health check for {self.name} has failed. Exiting Programme. Bye..')
@@ -50,28 +52,30 @@ class Client:
                 logging.error(f'could not connect to {name}. Giving up. \nParameters were:  \n{json.dumps(params, indent=4)}')
                 return False
 
-    def delete(self, service, endpoint, payload=None, resp=False, error=None, **kwargs):
-        return self._make_request(r.get, service, endpoint, payload, resp, error, **kwargs)
+    def delete(self, endpoint, payload=None, resp=False, error=None, **kwargs):
+        return self._make_request(r.get, endpoint, payload, resp, error, **kwargs)
 
-    def put(self, service, endpoint, payload=None, resp=False, error=None, **kwargs):
-        return self._make_request(r.put, service, endpoint, payload, resp, error, **kwargs)
+    def put(self, endpoint, payload=None, resp=False, error=None, **kwargs):
+        return self._make_request(r.put, endpoint, payload, resp, error, **kwargs)
 
-    def post(self, service, endpoint, payload=None, resp=False, error=None, **kwargs):
-        return self._make_request(r.post, service, endpoint, payload, resp, error, **kwargs)
+    def post(self, endpoint, payload=None, resp=False, error=None, **kwargs):
+        return self._make_request(r.post, endpoint, payload, resp, error, **kwargs)
 
-    def delete(self, service, endpoint, payload=None, resp=False, error=None, **kwargs):
-        return self._make_request(r.delete, service, endpoint, payload, resp, error, **kwargs)
+    def delete(self, endpoint, payload=None, resp=False, error=None, **kwargs):
+        return self._make_request(r.delete, endpoint, payload, resp, error, **kwargs)
 
-    def _make_request_args(self, service, endpoint, payload, **kwargs):
+    def _make_request_args(self, endpoint, payload, **kwargs):
         args = {}
         arg_string = "&".join(list(map(lambda kw: f'{kw}={kwargs.get(kw)}', kwargs)))
         url = f'{self.base_route}/{endpoint}/{arg_string}'
+        headers = {'userID': self.behalf, 'chainName': self.chainName}
         if payload:
             args.update(payload=payload)
         args.update(url=url)
+        args.update(headers=headers)
 
-    def _make_request(self, http_method, service, endpoint, payload=None, resp=False, error=None, **kwargs):
-        req_args = self._make_request_args(service, endpoint, payload, **kwargs)
+    def _make_request(self, http_method, endpoint, payload=None, resp=False, error=None, **kwargs):
+        req_args = self._make_request_args(endpoint, payload, **kwargs)
         if not resp:
             logging.debug(f'Making call to {self.name} for {req_args.get("url")}')
             http_method(**req_args)
