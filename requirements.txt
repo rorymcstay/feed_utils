@@ -3,3 +3,4 @@ bs4
 requests
 flask-classy
 flask
+python-jose
