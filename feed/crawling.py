@@ -209,8 +209,7 @@ class BrowserActions(ActionChain):
                 out.append(child.attrs.get('href'))
         if len(out) == 0:
             raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
-        # TODO should put this into a callback
-        # TODO should republish chain here
+        # TODO should put rePublishing into a callback.
         self.rePublish(key=self.driver.current_url, action=action, data=out)
         if not action.isSingle:
             return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=url) for url in out]
@@ -328,19 +327,20 @@ class BrowserService:
         """
         open a process, forward its logs and watch for commands in a queue.
         """
-        logging.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
+        sellogger = logging.getLogger('crawling.SeleniumProcessLogger')
+        sellogger.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
         with subprocess.Popen(os.getenv('SELENIUM_PROCESS_SCRIPT',  "/opt/bin/start-selenium-standalone.sh"), stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
             for line, command in BrowserService._bind_queue_and_log(self.browser_process_command_queue, process.stdout):
-                logging.info(f'BrowserService:: {line}')
+                sellogger.info(f'BrowserService:: {line}')
                 if command is None:
-                    logging.debug(f'nothing in queue')
+                    sellogger.debug(f'nothing in queue')
                     continue
                 elif command == 'KILL':
-                    logging.debug(f'have queue item')
-                    logging.info(f'BrowserService::beginBrowserThread(): Killing process {process.id}')
+                    sellogger.debug(f'have queue item')
+                    sellogger.info(f'BrowserService::beginBrowserThread(): Killing process {process.id}')
                     process.kill()
-                    logging.debug(f'monitor thread is {"alive" if self.browser_monitor_thread.is_alive() else "complete"}')
-        logging.info(f'Browser process {process.pid} has been torn down.')
+                    sellogger.debug(f'monitor thread is {"alive" if self.browser_monitor_thread.is_alive() else "complete"}')
+        sellogger.info(f'Browser process {process.pid} has been torn down.')
 
     def _browser_clean_up(self):
         """

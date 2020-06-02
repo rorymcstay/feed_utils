@@ -31,6 +31,12 @@ database_parameters = {
     "password": os.getenv("DATABASE_PASS", "postgres"),
 }
 
+authn_params = {
+    'authn_url': os.getenv('AUTHN_SERVER', 'http://localhost:8080'),
+    'authn_pass': os.getenv('AUTHN_PASS', 'world'),
+    'authn_user': os.getenv('AUTHN_USER', 'hello')
+}
+
 
 ########################
 # COMPONENT Connectivity
@@ -84,22 +90,22 @@ feed_params = {
     "base_port": int(os.getenv("LEADER_BASE_PORT", 9000))
 }
 
-logger_settings_dict = {
+logger_settings_dict = lambda name: {
     'version': 1,
     'formatters': {'default': {
-        'format': '[%(asctime)s]%(thread)d: %(module)s - %(levelname)s - %(message)s',
+        'format': '[%(asctime)s]%(thread)d: %(module)s - %(levelname)s - %(message)s %(filename)s:%(lineno)d',
     }},
     'handlers': {'wsgi': {
         'class': 'logging.StreamHandler',
         'stream': 'ext://flask.logging.wsgi_errors_stream',
         'formatter': 'default'
     }},
-    'root': {
+    'kafka': {
+        'level': os.getenv("KAFKA_LOG_LEVEL", 'WARNING')
+    },
+    name: {
         'level': os.getenv("LOG_LEVEL", "INFO"),
         'handlers': ['wsgi']
-    },
-    'kafka': {
-        'level': os.getenv("KAFKA_LOG_LEVEL", 'INFO')
     },
     'urllib3': {
         'level': os.getenv('URLLIB_LOG_LEVEL', 'WARNING')

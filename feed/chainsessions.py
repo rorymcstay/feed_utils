@@ -8,7 +8,16 @@ from flask.sessions import SessionInterface, SessionMixin
 from flask import Flask, session, Request
 import time
 import logging
-from feed.settings import mongo_params
+import requests
+
+
+from feed.service import Client
+from feed.settings import mongo_params, nanny_params, routing_params, authn_params
+try:
+    from feed.authnclient import AuthNClient
+except ModuleNotFoundError:
+    logging.warning('Authorisation capabilities not present')
+
 
 
 class ChainSession(SessionInterface):
@@ -32,17 +41,22 @@ class ChainSession(SessionInterface):
         else:
             return True
 
-    def open_session(self, app, request: Request):
+    def open_session(self, app, request: Request, reqUserID=None):
         chainNames = request.path.split("/")
-        userID = request.headers.get('userId')
+        userID = request.headers.get('userId') if reqUserID is None else reqUserID
         currentChain = self._chaindefinitions.find_one({'name': {"$in": chainNames}, 'userID': userID}, projection=["name", 'userID'])
-        if name is None:
-            chainSession = self.sessionConstructor(name=None)
+        logging.debug(f'Getting session for {currentChain}')
+        if currentChain is None:
+            chainSession = self.sessionConstructor(name=None, userID=userID)
         else:
-            logging.info(f'starting session for name=[{name.get("name")}]')
+            logging.info(f'starting session for name=[{currentChain.get("name")}]')
+            currentChain.pop('_id', None)
             chainSession = self._open_session(**currentChain)
+        logging.info(f'Opening session for userID=[{userID}], chainName=[{currentChain}]')
 
         chainSession.update({'chain_db': self._client[os.getenv('CHAIN_DB', 'actionChains')],
+                             'nanny': Client('nanny', **nanny_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
+                             'router': Client('router', **routing_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
                              'chainDefinitions': self._chaindefinitions})
         return chainSession
 
@@ -51,7 +65,7 @@ class ChainSession(SessionInterface):
             self._save_session(session)
 
     @staticmethod
-    def get_session_id(chainName):
+    def get_session_id(self, chainName):
         return f'{chainName}-{time.strftime("%d_%m")}'
 
     def _save_session(self, session):
@@ -61,23 +75,30 @@ class ChainSession(SessionInterface):
         self._sessioncollection.replace_one({'session_id': ChainSession.get_session_id(session.name)}, replacement=sessionOut, upsert=True)
 
     def _open_session(self, name, userID):
-        # TODO: session id logic
         sess = self._sessioncollection.find_one({'session_id': ChainSession.get_session_id(name), 'userID': userID})
         if sess is None:
             return self.sessionConstructor(name=name, session_id=ChainSession.get_session_id(name))
         else:
             return self.sessionConstructor(**sess)
 
+#TODO def is_null_session():
+
 
 class AuthorisedChainSession(ChainSession):
 
-    def __init__(*args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.authn = AuthNClient(**authn_params)
+
+    def open_session(self, app, request: Request):
+        token = request.cookies.get('authn')
+        logging.debug(f'Supplied cookie for authentication is {token}')
+        # TODO need to properly return unauthenticated when the use supplies invalid authentication.
+        acc = self.authn.getAccount(token)
+        logging.debug(f'Authenticated user {acc.get("username")}, with userID=[{acc.get("id")}]')
+        return super().open_session(app, request, acc.get('id'))
 
 
-
-
-#TODO def is_null_session():
 
 def probeMongo(client):
     try:
@@ -87,14 +108,14 @@ def probeMongo(client):
         return False
     return True
 
-def init_app(domainImpl):
+def init_app(domainImpl, sessionManager=ChainSession):
 
     app = Flask(__name__)
 
     app.permanent_session_lifetime = timedelta(days=31)
     app.secret_key = os.getenv('SECRET_KEY', 'this is supposed to be secret')
 
-    sessionManager = ChainSession(domainImpl)
+    sessionManager = sessionManager(domainImpl)
 
     app.session_interface = sessionManager
 
