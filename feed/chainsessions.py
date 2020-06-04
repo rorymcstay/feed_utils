@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
 from pymongo.database import Database
@@ -54,6 +55,7 @@ class ChainSession(SessionInterface):
             chainSession = self._open_session(**currentChain)
         logging.info(f'Opening session for userID=[{userID}], chainName=[{currentChain}]')
 
+        # pass a client to the database, and 'clients' containing user info in session.
         chainSession.update({'chain_db': self._client[os.getenv('CHAIN_DB', 'actionChains')],
                              'nanny': Client('nanny', **nanny_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
                              'router': Client('router', **routing_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
@@ -91,10 +93,16 @@ class AuthorisedChainSession(ChainSession):
         self.authn = AuthNClient(**authn_params)
 
     def open_session(self, app, request: Request):
-        token = request.cookies.get('authn')
-        logging.debug(f'Supplied cookie for authentication is {token}')
+        id_token = self.authn.getIdToken(request) # we make request on behalf of client to verify who they are.
+        logging.debug(f'Supplied header for authentication is [{id_token}]')
+        logging.debug(f'Supplied for authentication is [{request.headers.get("authn")}]')
         # TODO need to properly return unauthenticated when the use supplies invalid authentication.
-        acc = self.authn.getAccount(token)
+        referer_header = request.headers.get('Referer')
+        logging.debug(f'headers.Referer=[{referer_header}]')
+        logging.debug(f'url parts=[{urlparse(referer_header).netloc.split(":")}]')
+        refererHost = urlparse(referer_header).netloc.split(":")[0]
+        logging.debug(f'Received request from {request.headers.get("Referer")}, parser hostname=[{refererHost}], will use for audience challenge.')
+        acc = self.authn.getAccount(id_token, refererHost)
         logging.debug(f'Authenticated user {acc.get("username")}, with userID=[{acc.get("id")}]')
         return super().open_session(app, request, acc.get('id'))
 

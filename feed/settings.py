@@ -42,11 +42,6 @@ authn_params = {
 # COMPONENT Connectivity
 # defaults to localhost for local debugging
 # ports here should match up with the development.yml for exposing ports
-
-ui_server_params = {
-    "host": os.getenv('UISERVER_HOST', 'localhost'),
-    "port": os.getenv('FLASK_PORT', 5004) # ui-server
-    }
 nanny_params = {
     "host": os.getenv("NANNY_HOST", "localhost"),
     "port": os.getenv("FLASK_PORT", 5003), # nanny
@@ -60,20 +55,6 @@ routing_params = {
     "api_prefix": "routingcontroller"
 }
 
-persistence_params = {
-    "host": os.getenv("PERST_HOST", "localhost"),
-    "port": os.getenv("FLASK_PORT", 5006) # persistence
-}
-
-summarizer_params = {
-    "host": os.getenv("SUMMARIZER_HOST", "localhost"),
-    "port": os.getenv("FLASK_PORT", 5005) # summarizer
-}
-
-command_params = {
-    "host": os.getenv("COMMANDS_HOST", "localhost"),
-    "port": os.getenv("FLASK_PORT", 5001) # commands
-}
 ########################
 
 
@@ -93,7 +74,7 @@ feed_params = {
 logger_settings_dict = lambda name: {
     'version': 1,
     'formatters': {'default': {
-        'format': '[%(asctime)s]%(thread)d: %(module)s - %(levelname)s - %(message)s %(filename)s:%(lineno)d',
+        'format': '[%(asctime)s]%(thread)d: %(module)s - %(levelname)s - %(message)s |%(filename)s:%(lineno)d',
     }},
     'handlers': {'wsgi': {
         'class': 'logging.StreamHandler',

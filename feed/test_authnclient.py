@@ -43,12 +43,7 @@ class TestAuthnClient(TestCase):
     def tearDownClass(cls):
         pass
 
-
-    @classmethod
-    def setUp(cls):
-        """
-        attempt to login, if failed, then there is no account so setone up. Set the sessionToken to work on then.
-        """
+    def createOrLoginUser(cls):
         cls.authn = AuthNClient(authn_url='http://localhost:8080', authn_user='hello', authn_pass='world', refresh_rate=60)
         userSignUp = requests.post(f'{cls.authn.authn_url}/accounts',
                 headers={'Origin': 'http://localhost'},
@@ -62,9 +57,18 @@ class TestAuthnClient(TestCase):
         else:
             cls.sessionToken = userSignUp.json().get('result').get('id_token')
 
+    @classmethod
+    def setUp(cls):
+        """
+        attempt to login, if failed, then there is no account so setone up. Set the sessionToken to work on then.
+        """
+        pass
+
+
     def test_getAccount(self):
-        acc = self.authn.getAccount(self.sessionToken)
-        self.assertDictEqual({'result': {'deleted': False, 'id': 1, 'locked': False, 'username': 'test_user'}},
+        self.createOrLoginUser()
+        acc = self.authn.getAccount(self.sessionToken, 'localhost')
+        self.assertDictEqual({'result': {'deleted': False, 'id': 2, 'locked': False, 'username': 'test_user'}},
                 acc)
 
 
