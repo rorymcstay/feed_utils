@@ -36,3 +36,6 @@ def initialiseSrcLogger():
     srcLogger.addHandler(handler)
 
 
+class ClassLogger:
+    def __init__(self):
+        self.log = logging.getLogger(self.__class__.__name__)

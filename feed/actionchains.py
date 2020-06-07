@@ -7,13 +7,15 @@ import json
 from json.encoder import JSONEncoder
 from feed.actiontypes import ReturnTypes
 from bs4 import BeautifulSoup, Tag
-from feed.settings import kafka_params, routing_params, nanny_params
-from feed.actiontypes import ActionChainException
+
 import signal
 
 
 from kafka import KafkaConsumer, KafkaProducer
 
+from feed.service import Client
+from feed.settings import kafka_params, routing_params, nanny_params
+from feed.actiontypes import ActionChainException
 
 
 class GracefulKiller:
@@ -136,7 +138,7 @@ class Action(BrowserSearchParams):
             logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
         except ActionChainException as ex:
-            Action.publishActionEror(ex)
+            Action.publishActionEror(chain, ex)
             logging.info(f'{type(ex).__name__} thrown whilst processing')
             return False
         except Exception as ex:
@@ -156,8 +158,8 @@ class Action(BrowserSearchParams):
         # TODO For UI-Server
         return [self.__dict__().keys()]
 
-    def publishActionEror(actionException):
-        requests.put('http://{host}:{port}/actionsmanager/reportActionError/{name}'.format(name=actionException.chainName, **nanny_params), json=actionException.__dict__())
+    def publishActionEror(chain, actionException):
+        chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainname}', json=actionException.__dict__())
 
 
 class CaptureAction(Action):
@@ -214,7 +216,11 @@ class ActionChain:
         self.name = kwargs.get('name')
         self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
+        self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
+
+        self.nannyClient = Client('nanny', nanny_params, behalf=self.userID, check_health=False)
+        self.routerClient = Client('router', routing_params, behalf=self.userID, check_health=False)
         self.failedChain = False
         for order, params in enumerate(actionParams):
             try:
@@ -226,16 +232,9 @@ class ActionChain:
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
 
     def recoverHistory(self):
-        try:
-            req = requests.get('http://{host}:{port}/routingcontroller/getLastPage/{name}'.format(name=self.name, **routing_params))
-        except Exception as e:
-            logging.warning(f'ActionChain::recoverHistory: router is unavailable')
+        req = self.routerClient.get(f'/routingcontroller/getLastPage/{self.name}', resp=True, errors=[])
         logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
-        try:
-            data = req.json()
-        except Exception:
-            logging.warning(f'Did not get valid response from router. response=[{req}]')
-        return data
+        return req
 
     def saveHistory(self, url):
         pass
@@ -246,8 +245,7 @@ class ActionChain:
             return False
         for actionIndex in self.actions:
             logging.debug(f'Checking if {actionIndex} in {self.name} can be run')
-            errorReq = requests.get('http://{host}:{port}/actionsmanager/findActionErrorReports/{name}/{pos}'.format(**nanny_params, name=self.name, pos=actionIndex))
-            errors = errorReq.json()
+            errors = self.nannyClient.get(f'/actionsmanager/findActionErrorReports/{self.name}/{actionIndex}', resp=True, error=[])
             if len(errors) > 0:
                 logging.info(f'Will not run {self.name}')
                 return False
@@ -294,7 +292,12 @@ class ActionChain:
                 continue
             callBackMethod = getattr(caller, f'on{type(action).__name__}Callback')
             for item in success:
-                callBackMethod(item)
+                try:
+                    callBackMethod(item, chain=self)
+                except ActionChainException as ex:
+                    logging.warning(f'{type(ex).__name__} raised during on{type(action).__name__}CallBack')
+                    ex.chainName = self.name
+                    Action.publishActionEror(self, ex)
             self.saveHistory()
             self.onChainEnd()
 
