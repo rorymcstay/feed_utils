@@ -58,7 +58,7 @@ class AuthNClient(RemoteJWKCache):
 
     _instance = None
     _id_token_map = {}
-    _timeout = 10
+    _timeout = 3600
 
     def __init__(self, authn_url, authn_user, authn_pass, *args, **kwargs):
         self.authn_url = authn_url
@@ -95,8 +95,8 @@ class AuthNClient(RemoteJWKCache):
     def getIdToken(self, request: Request):
         # This needs to be cached somehow
         cookie = request.cookies.get('authn')
-        if self._id_token_map.get(cookie) and (time.time() - self._id_token_map.get(cookie).time < self._timeout):
-            return self._id_token_map.get(cookie).token
+        #if self._id_token_map.get(cookie) and (time.time() - self._id_token_map.get(cookie).time < self._timeout):
+        #    return self._id_token_map.get(cookie).token
         logging.debug(f'Cookies=[{request.cookies}], Headers=[{request.headers}]')
         cookies = {'authn': request.cookies.get('authn')}
         headers = {'Origin': request.headers.get('Origin'), 'Referer': request.headers.get('Referer')}

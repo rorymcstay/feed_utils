@@ -93,7 +93,11 @@ class Client:
             return error
         try:
             data = ret.json()
-            logging.debug(f'Got valid response from {self.name} for {req_args.get("name")}')
+            logging.debug(f'Got valid response from {self.name} for {req_args.get("url")}, {ret.status_code}')
+            if data is None:
+                logging.warning(f'Response was None from {self.name} for {req_args.get("url")}')
+                return error
+            logging.debug(f'Returning data=[{data}]')
             return data
         except JSONDecodeError as ex:
             logging.warning(f'Error decoding data from {self.name} with {req_args.get("url")}. response_headers=[{ret.headers}], status_code=[{ret.status_code}]')

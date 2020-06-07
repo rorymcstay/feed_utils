@@ -1,5 +1,5 @@
-from feed.logger import getLogger
 from queue import Queue
+import logging
 import os
 import sys
 import traceback
@@ -24,9 +24,6 @@ from feed.service import Client
 
 from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction, Action
 from feed.actiontypes import ActionableItemNotFound
-
-
-logging = getLogger(__name__)
 
 
 def verifyUrl(url):

@@ -67,7 +67,7 @@ class ChainSession(SessionInterface):
             self._save_session(session)
 
     @staticmethod
-    def get_session_id(self, chainName):
+    def get_session_id(chainName):
         return f'{chainName}-{time.strftime("%d_%m")}'
 
     def _save_session(self, session):
@@ -94,18 +94,14 @@ class AuthorisedChainSession(ChainSession):
 
     def open_session(self, app, request: Request):
         id_token = self.authn.getIdToken(request) # we make request on behalf of client to verify who they are.
-        logging.debug(f'Supplied header for authentication is [{id_token}]')
-        logging.debug(f'Supplied for authentication is [{request.headers.get("authn")}]')
+        logging.debug(f'')
         # TODO need to properly return unauthenticated when the use supplies invalid authentication.
         referer_header = request.headers.get('Referer')
-        logging.debug(f'headers.Referer=[{referer_header}]')
-        logging.debug(f'url parts=[{urlparse(referer_header).netloc.split(":")}]')
-        refererHost = urlparse(referer_header).netloc.split(":")[0]
-        logging.debug(f'Received request from {request.headers.get("Referer")}, parser hostname=[{refererHost}], will use for audience challenge.')
-        acc = self.authn.getAccount(id_token, refererHost)
-        logging.debug(f'Authenticated user {acc.get("username")}, with userID=[{acc.get("id")}]')
+        audience_challenge = urlparse(referer_header).netloc
+        logging.debug(f'Attempting to authenticate request with: referer_header=[{referer_header}], audience_challenge=[{audience_challenge}], id_token=[{id_token}]')
+        acc = self.authn.getAccount(id_token, audience_challenge)
+        logging.debug(f'Authenticated user name=[{acc.get("username")}], userID=[{acc.get("id")}]')
         return super().open_session(app, request, acc.get('id'))
-
 
 
 def probeMongo(client):

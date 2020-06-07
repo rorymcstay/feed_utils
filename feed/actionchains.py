@@ -293,7 +293,7 @@ class ActionChain:
             callBackMethod = getattr(caller, f'on{type(action).__name__}Callback')
             for item in success:
                 try:
-                    callBackMethod(item)
+                    callBackMethod(item, chain=self)
                 except ActionChainException as ex:
                     logging.warning(f'{type(ex).__name__} raised during on{type(action).__name__}CallBack')
                     ex.chainName = self.name
