@@ -33,3 +33,5 @@ class TestBrowserService(SeleniumTestInterface, TestCase):
         cls.browserService.driver.quit()
         del cls.browserService
 
+if __name__ == '__main__':
+    unittest.main()
