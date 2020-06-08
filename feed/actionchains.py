@@ -138,7 +138,7 @@ class Action(BrowserSearchParams):
             logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
             return ret
         except ActionChainException as ex:
-            Action.publishActionEror(chain, ex)
+            Action.publishActionError(chain, ex)
             logging.info(f'{type(ex).__name__} thrown whilst processing')
             return False
         except Exception as ex:
@@ -158,8 +158,8 @@ class Action(BrowserSearchParams):
         # TODO For UI-Server
         return [self.__dict__().keys()]
 
-    def publishActionEror(chain, actionException):
-        chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainname}', json=actionException.__dict__())
+    def publishActionError(chain, actionException):
+        chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainName}', payload=actionException.__dict__())
 
 
 class CaptureAction(Action):
@@ -219,8 +219,8 @@ class ActionChain:
         self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
 
-        self.nannyClient = Client('nanny', nanny_params, behalf=self.userID, check_health=False)
-        self.routerClient = Client('router', routing_params, behalf=self.userID, check_health=False)
+        self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
+        self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
         self.failedChain = False
         for order, params in enumerate(actionParams):
             try:
@@ -249,6 +249,7 @@ class ActionChain:
             if len(errors) > 0:
                 logging.info(f'Will not run {self.name}')
                 return False
+        return True
 
     @staticmethod
     def actionFactory(position, actionParams):
@@ -297,7 +298,7 @@ class ActionChain:
                 except ActionChainException as ex:
                     logging.warning(f'{type(ex).__name__} raised during on{type(action).__name__}CallBack')
                     ex.chainName = self.name
-                    Action.publishActionEror(self, ex)
+                    Action.publishActionError(self, ex)
             self.saveHistory()
             self.onChainEnd()
 
@@ -435,6 +436,7 @@ class KafkaActionSubscription(ActionChainRunner):
         logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topic=[{topic}], prefix=[{os.environ["KAFKA_TOPIC_PREFIX"]}]')
         self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
         self.topic = f'{os.environ["KAFKA_TOPIC_PREFIX"]}-{topic}'
+        logging.debug(f'Fully qualified topic=[{self.topic}]')
 
 
     def subscription(self):

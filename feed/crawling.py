@@ -243,7 +243,7 @@ class BrowserActions(ActionChain):
             self.driver.get(url)
 
         ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
-        caller.initialiseCallback(ret)
+        caller.initialiseCallback(ret, chain=self)
 
 
 class BrowserService:

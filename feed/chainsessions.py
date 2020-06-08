@@ -44,21 +44,26 @@ class ChainSession(SessionInterface):
 
     def open_session(self, app, request: Request, reqUserID=None):
         chainNames = request.path.split("/")
-        userID = request.headers.get('userId') if reqUserID is None else reqUserID
-        currentChain = self._chaindefinitions.find_one({'name': {"$in": chainNames}, 'userID': userID}, projection=["name", 'userID'])
-        logging.debug(f'Getting session for {currentChain}')
-        if currentChain is None:
+        userID = request.headers.get('userID') if reqUserID is None else reqUserID
+        chainName = request.headers.get('chainName', {"$in": chainNames}) # if there is no request header chainName, then we should use the list of url
+        currentChain = self._chaindefinitions.find_one({'name': chainName, 'userID': userID}, projection=["name", 'userID'])
+        logging.debug(f'Getting session for {currentChain}, userID=[{userID}]')
+        if currentChain is None and self.sessionConstructor.__name__ != 'User':
+            logging.debug(f'No active session with {chainName}')
             chainSession = self.sessionConstructor(name=None, userID=userID)
         else:
-            logging.info(f'starting session for name=[{currentChain.get("name")}]')
+            if currentChain is None:
+                currentChain = {}
+            logging.info(f'starting session for name=[{chainName}], userID=[{userID}]')
             currentChain.pop('_id', None)
-            chainSession = self._open_session(**currentChain)
-        logging.info(f'Opening session for userID=[{userID}], chainName=[{currentChain}]')
+            chainSession = self._open_session(currentChain.get("name"), userID)
+            logging.info(f'Opening session for userID=[{currentChain.get("userID")}], chainName=[{currentChain.get("name")}]')
+        logging.debug(f'Opened session type {self.sessionConstructor.__name__}')
 
         # pass a client to the database, and 'clients' containing user info in session.
         chainSession.update({'chain_db': self._client[os.getenv('CHAIN_DB', 'actionChains')],
-                             'nanny': Client('nanny', **nanny_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
-                             'router': Client('router', **routing_params, attempts=1, check_health=False, behalf=chainSession.userID, chainName=chainSession.name),
+                             'nanny': Client('nanny', **nanny_params, attempts=1, check_health=False, behalf=userID, chainName=chainSession.name),
+                             'router': Client('router', **routing_params, attempts=1, check_health=False, behalf=userID, chainName=chainSession.name),
                              'chainDefinitions': self._chaindefinitions})
         return chainSession
 
@@ -66,21 +71,27 @@ class ChainSession(SessionInterface):
         if session.modified:
             self._save_session(session)
 
-    @staticmethod
-    def get_session_id(chainName):
+    def __get_session_id(self, chainName):
+        if self.sessionConstructor.__name__ == 'User':
+            logging.debug('Returning session id for user')
+            return {"$regex": ".*"} # no temporal session is linked to a User
         return f'{chainName}-{time.strftime("%d_%m")}'
 
     def _save_session(self, session):
         sessionOut = session.__dict__()
-        sessionOut.update({'session_id': ChainSession.get_session_id(session.name)})
-        logging.debug(f'saving sessin for name=[{session.name}], userID=[{session.userID}]')
-        self._sessioncollection.replace_one({'session_id': ChainSession.get_session_id(session.name)}, replacement=sessionOut, upsert=True)
+        if session.__name__ != 'User':
+            logging.debug(f'ChainSession is not User')
+            sessionOut.update({'session_id': self.__get_session_id(session.name)})
+        logging.debug(f'saving session for name=[{self.__get_session_id(session.name)}], userID=[{session.userID}]')
+        self._sessioncollection.replace_one({'session_id': self.__get_session_id(session.name), 'userID': session.userID}, replacement=sessionOut, upsert=True)
 
     def _open_session(self, name, userID):
-        sess = self._sessioncollection.find_one({'session_id': ChainSession.get_session_id(name), 'userID': userID})
+        sess = self._sessioncollection.find_one({'session_id': self.__get_session_id(name), 'userID': userID})
         if sess is None:
-            return self.sessionConstructor(name=name, session_id=ChainSession.get_session_id(name))
+            logging.info(f'Lookup failed for _open_session with name={self.__get_session_id(name)} and userID={userID}.')
+            return self.sessionConstructor(name=name, session_id=self.__get_session_id(name), userID=userID)
         else:
+            logging.debug(f'Lookup succeeded for _open_session with name={self.__get_session_id(name)}, userID={userID}')
             return self.sessionConstructor(**sess)
 
 #TODO def is_null_session():

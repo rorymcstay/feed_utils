@@ -65,6 +65,7 @@ class Client:
         return self._make_request(r.delete, endpoint, payload, resp, error, **kwargs)
 
     def _make_request_args(self, endpoint, payload, **kwargs):
+        logging.debug(f'making request on behalf=[{self.behalf}] to {self.name}')
         args = {}
         arg_string = "&".join(list(map(lambda kw: f'{kw}={kwargs.get(kw)}', kwargs)))
         if endpoint[0] == '/':
@@ -72,11 +73,14 @@ class Client:
         if arg_string != '':
             arg_string = f'?{arg_string}'
         url = f'{self.base_route}/{endpoint}{arg_string}'
-        headers = {'userID': str(self.behalf), 'chainName': self.chainName}
-        if payload:
+        headers = {'userID': str(self.behalf)}
+        if self.chainName:
+            headers.update(chainName=self.chainName)
+        if isinstance(payload, dict):
             headers.update({'Content-Type': 'application/json'})
-            logging.debug(f'Adding payload to request')
             args.update(json=payload)
+        elif payload:
+            args.update(data=payload)
         args.update(url=url)
         args.update(headers=headers)
         return args
