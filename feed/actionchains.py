@@ -144,6 +144,7 @@ class Action(BrowserSearchParams):
         except Exception as ex:
             traceback.print_exc()
             logging.warning(f'Action::execute:: {type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
+            Action.publishUnhandledActionError(chain, ex)
             return False
             # TODO Exception reporting callback called here
             # OnClickException for example
@@ -158,8 +159,15 @@ class Action(BrowserSearchParams):
         # TODO For UI-Server
         return [self.__dict__().keys()]
 
+    @staticmethod
     def publishActionError(chain, actionException):
         chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainName}', payload=actionException.__dict__())
+
+    @staticmethod
+    def publishUnhandledActionError(chain, exception):
+        #chain.nannyClient.put(f'')
+        logging.warning(f'Unhandled exception in action {self.__dict__()}, exception={exception.args}')
+        pass
 
 
 class CaptureAction(Action):
@@ -236,7 +244,7 @@ class ActionChain:
         logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
         return req
 
-    def saveHistory(self, url):
+    def saveHistory(self):
         pass
 
     def shouldRun(self):

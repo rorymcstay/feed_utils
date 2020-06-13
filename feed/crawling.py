@@ -215,7 +215,12 @@ class BrowserActions(ActionChain):
 
     def onInputAction(self, action: InputAction):
         inputField: WebElement = action.getActionableItem(action, self.driver)
-        inputField.send_keys(action.inputString)
+        try:
+            inputField.send_keys(action.inputString)
+        except AttributeError as ex:
+            # TODO should also handle element not interactable here and give invalid element found back to user
+            # TODO in the above case, should try surrounding elements - general rule should be to go inwards
+            raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         logging.warning(f'{type(self).__name__}::onInputAction: chain=[{self.name}], action=[{action}]')
         return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
 

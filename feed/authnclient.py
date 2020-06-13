@@ -75,7 +75,7 @@ class AuthNClient(RemoteJWKCache):
         for key in self.keys:
             #jsonrep = key.to_dict()
             logging.debug(f'trying to decrypt token decrypt with audience challeng=[{audience}]')
-            pl = jwt.decode(token, self.keys, audience=audience)
+            pl = jwt.decode(token, self.keys, audience=audience, options={'verify_aud': True if os.getenv("AUTHN_VERIFY_AUD") else False })
             logging.debug(f'payload=[{pl}]')
         logging.warning(f'Could not decode token')
         return pl
