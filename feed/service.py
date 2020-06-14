@@ -1,4 +1,5 @@
 import sys
+import traceback
 import time
 import json
 from json.decoder import JSONDecodeError
@@ -27,30 +28,21 @@ class Client:
         self.name = name
         self.chainName = chainName
         if check_health:
-            if not self.healthCheck(conn_attempts=5):
+            if not self.healthCheck():
                 logging.error(f'Health check for {self.name} has failed. Exiting Programme. Bye..')
                 sys.exit()
 
-    def healthCheck(self, conn_attempts=1):
+    def healthCheck(self):
         try:
             hc = r.get(f'{self.base_route}/service/healthCheck')
             if 100 < hc.status_code < 300:
                 return True
-            if hc.status_code is 404:
-                logging.warning(f'health check for {name}/{params.get("api_prefix")} was not found')
-                return False
             else:
                 logging.warning("health check returned unhealthy status_code=[{hc.status_code}]")
                 return False
         except Exception as e:
-            attempts += 1
-            if attempts < conn_attempts:
-                time.sleep(self.wait)
-                logging.warning(f'could not connect to {name}, trying again {conn_attempts - attempts} more times')
-                self.__init__(name, attempts, **params)
-            else:
-                logging.error(f'could not connect to {name}. Giving up. \nParameters were:  \n{json.dumps(params, indent=4)}')
-                return False
+            traceback.print_exc()
+            return False
 
     def get(self, endpoint, payload=None, resp=False, error=None, **kwargs):
         return self._make_request(r.get, endpoint, payload, resp, error, **kwargs)

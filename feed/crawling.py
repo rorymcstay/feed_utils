@@ -46,9 +46,10 @@ class BrowserActions(ActionChain):
             self.current_url = current_url
             self.data = data
             self.action = action
+            self.userID = kwargs.get('userID')
 
         def __dict__(self):
-            return dict(name=self.name, current_url=self.current_url, data=self.data, action=self.action.__dict__())
+            return dict(name=self.name, userID=self.userID, current_url=self.current_url, data=self.data, action=self.action.__dict__())
 
     driver = None # type: WebDriver
 
@@ -57,6 +58,8 @@ class BrowserActions(ActionChain):
         self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
         self.kwargs = kwargs
         self.driver = driver
+        self.soup = BeautifulSoup("<div>None</div>")
+        self.backupKeyIncrement = 0
 
     @staticmethod
     def _get_button_to_click(item, action):
@@ -79,6 +82,10 @@ class BrowserActions(ActionChain):
                 return but
         else:
             return None
+
+    def _update_soup(self):
+        logging.info(f'Updating soup for {self}')
+        self.soup = BeautifulSoup(self.driver.page_source)
 
     @staticmethod
     def _searchNavigableStringForTag(navString: NavigableString, text):
@@ -139,17 +146,20 @@ class BrowserActions(ActionChain):
             else:
                 logging.debug(f'{type(self).__name__}::onClickAction(): current url has changed from "{clickingFrom}" to "{self.driver.current_url}"')
             logging.info(f'{type(self).__name__}::onClickAction(): current url has changed from "{clickingFrom}" to "{self.driver.current_url}"')
-        return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=None)]
+        self._update_soup()
+        return [BrowserActions.Return(current_url=self.driver.current_url, userID=self.userID, name=self.name, action=action, data=None)]
 
     def onCaptureAction(self, action: CaptureAction):
+        action.backupKey = f'{self.driver.current_url}'
         data = action.getActionableItem(action, self.driver)
         if data is None:
             raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         self.rePublish(key=self.driver.current_url, action=action, data=data)
         if not action.isSingle:
-            return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=item) for item in data]
+            return [BrowserActions.Return(current_url=self.driver.current_url, userID=self.userID, name=self.name, action=action, data=item) for item in data]
         else:
-            return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=data)]
+            logging.debug(f'returning data={data}, action={action}')
+            return [BrowserActions.Return(current_url=self.driver.current_url, userID=self.userID, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
         logging.info(f'{type(self).__name__}::onPublishAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
@@ -209,9 +219,9 @@ class BrowserActions(ActionChain):
         # TODO should put rePublishing into a callback.
         self.rePublish(key=self.driver.current_url, action=action, data=out)
         if not action.isSingle:
-            return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=url) for url in out]
+            return [BrowserActions.Return(current_url=self.driver.current_url, userID=self.userID, name=self.name, action=action,data=url) for url in out]
         else:
-            return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action,data=out[0])]
+            return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, userID=self.userID, action=action,data=out[0])]
 
     def onInputAction(self, action: InputAction):
         inputField: WebElement = action.getActionableItem(action, self.driver)
@@ -222,7 +232,7 @@ class BrowserActions(ActionChain):
             # TODO in the above case, should try surrounding elements - general rule should be to go inwards
             raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         logging.warning(f'{type(self).__name__}::onInputAction: chain=[{self.name}], action=[{action}]')
-        return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, data=inputField)]
+        return [BrowserActions.Return(current_url=self.driver.current_url, name=self.name, action=action, userID=self.userID, data=inputField)]
 
     def saveHistory(self):
         try:
@@ -246,8 +256,9 @@ class BrowserActions(ActionChain):
             caller.renewDriverSession()
             self.driver = caller.driver
             self.driver.get(url)
+        self._update_soup()
 
-        ret = BrowserActions.Return(action=None, data=None, current_url=self.driver.current_url, name=self.name)
+        ret = BrowserActions.Return(action=None, data=None, userID=self.userID, current_url=self.driver.current_url, name=self.name)
         caller.initialiseCallback(ret, chain=self)
 
 

@@ -76,7 +76,7 @@ class BrowserSearchParams(ObjectSearchParams):
                 logging.debug(f'ObjectSearchParam::_returnItem(): searching for node with attribues, class=[{cls}]')
                 out.extend(soup.findAll(attrs={'class': cls}))
             item = out
-            formatted = lambda it: it
+            formatted = lambda it: (it, it.find_parent("a").attrs if it.find_parent('a') is not None else {})
         elif self.returnType == 'attr':
             formatted = lambda element: element.get_attribute(self.attribute)
         elif self.returnType == 'element':
@@ -118,8 +118,6 @@ class BrowserSearchParams(ObjectSearchParams):
             return None
 
 
-
-
 class Action(BrowserSearchParams):
 
     def __init__(self, position, **kwargs):
@@ -144,7 +142,7 @@ class Action(BrowserSearchParams):
         except Exception as ex:
             traceback.print_exc()
             logging.warning(f'Action::execute:: {type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
-            Action.publishUnhandledActionError(chain, ex)
+            Action.publishUnhandledActionError(chain, ex, action)
             return False
             # TODO Exception reporting callback called here
             # OnClickException for example
@@ -161,26 +159,27 @@ class Action(BrowserSearchParams):
 
     @staticmethod
     def publishActionError(chain, actionException):
+        actionException.userID = chain.nannyClient.behalf
         chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainName}', payload=actionException.__dict__())
 
     @staticmethod
-    def publishUnhandledActionError(chain, exception):
+    def publishUnhandledActionError(chain, exception, action):
         #chain.nannyClient.put(f'')
-        logging.warning(f'Unhandled exception in action {self.__dict__()}, exception={exception.args}')
+        logging.warning(f'Unhandled exception in action {action.__dict__()}, exception={exception.args}')
         pass
 
 
 class CaptureAction(Action):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.kwargs.pop('data', None)
-        self.kwargs.pop('src', None)
-        self.returnType = 'src'
-        self.captureName = kwargs['captureName'] # mandatory
-        self.data = kwargs.get('data', None)
+        self.returnType = self.kwargs.pop('returnType', 'src')
+        self.parentAttributes = self.kwargs.pop('parentAttributes', {})
+        self.captureName = self.kwargs.pop('captureName') # mandatory
+        self.data = self.kwargs.pop('data', None)
+        self.backupKey = self.kwargs.pop('backupKey', None)
 
     def __dict__(self):
-        return dict(data=self.data, **self.kwargs)
+        return dict(data=self.data, parentAttributes=self.parentAttributes, backupKey=self.backupKey, captureName=self.captureName, returnType=self.returnType, **self.kwargs)
 
 class InputAction(Action):
 
@@ -239,6 +238,9 @@ class ActionChain:
                 traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
 
+    def __repr__(self):
+        return f'{type(self).__name__}: name={self.name}'
+
     def recoverHistory(self):
         req = self.routerClient.get(f'/routingcontroller/getLastPage/{self.name}', resp=True, errors=[])
         logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
@@ -286,7 +288,13 @@ class ActionChain:
         """
         logging.info(f'{type(self).__name__}::onChainEnd(): chainName={self.name}')
 
+    def initialiseClients(self):
+        logging.info(f'Initialising clients with {self.userID}')
+        self.nannyClient.behalf = self.userID
+        self.routerClient.behalf = self.userID
+
     def execute(self, caller, initialise=True):
+        self.initialiseClients()
         self.failedChain = False
         if initialise:
             self.initialise(caller)
@@ -357,7 +365,8 @@ class KafkaActionPublisher(ActionChain):
             'actions': [actionReturn.action],
             'startUrl': actionReturn.current_url,
             'isRepeating': False,
-            'name': actionReturn.name
+            'name': actionReturn.name,
+            'userID': actionReturn.userID
         }
 
         self.producer.send(topic=topic, value=payload)

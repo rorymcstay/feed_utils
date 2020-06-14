@@ -21,12 +21,13 @@ class ActionChainException(Exception):
 
     def __init__(self, position=None, chainName=None, actionHash=None, **kwargs):
         self.position = position
+        self.userID = kwargs.get('userID')
         self.chainName = chainName
         self.actionHash = actionHash
         self.message = kwargs.get('message', '')
 
     def __dict__(self):
-        return dict(position=self.position, actionHash=self.actionHash, chainName=self.chainName, errorType=type(self).__name__, message=self.message)
+        return dict(userID=self.userID, position=self.position, actionHash=self.actionHash, chainName=self.chainName, errorType=type(self).__name__, message=self.message)
 
 class ActionableItemNotFound(ActionChainException):
     pass
