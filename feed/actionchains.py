@@ -225,6 +225,7 @@ class ActionChain:
         self.repeating = kwargs.get('isRepeating', True)
         self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
+        self.isSample = False
 
         self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
         self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
@@ -319,6 +320,8 @@ class ActionChain:
             self.onChainEnd()
 
     def getRepublishRoute(self, action):
+        logging.debug(f'Getting sample route for {action}. isSample={self.isSample}')
+        sample = lambda route: f'{route}-sample'
         name = 'unknown'
         if isinstance(action, CaptureAction):
             name = 'summarizer-route'
@@ -329,7 +332,10 @@ class ActionChain:
             name = 'leader-route'
         route = f'{os.getenv("KAFKA_TOPIC_PREFIX", "d")}-{name}'
         logging.info(f'republishing to route=[{route}]')
-        return route
+        if self.isSample:
+            return sample(route)
+        else:
+            return route
 
     def rePublish(self, action, *args, **kwargs):
         pass
@@ -356,9 +362,8 @@ class KafkaActionPublisher(ActionChain):
         self.producer = KafkaProducer(**kafka_params, value_serializer=lambda m: bytes(json.dumps(m, cls=ActionReturnSerialiser).encode('utf-8')))
         self.messages_out_since_flush = 0
 
-    def rePublish(self, actionReturn):
+    def rePublish(self, actionReturn, topic):
         self.messages_out_since_flush += 1
-        topic = self.getRepublishRoute(actionReturn.action)
         # construct chain parameters to send
         actionReturn.action.data = actionReturn.data
         payload = {
@@ -370,7 +375,7 @@ class KafkaActionPublisher(ActionChain):
         }
 
         self.producer.send(topic=topic, value=payload)
-        logging.info(f'{type(self).__name__}::rePublish(): Republished ActionReturn(startUrl={actionReturn.current_url} for {type(actionReturn.action).__name__} to {topic}')
+        logging.info(f'{type(self).__name__}: Republished ActionReturn(startUrl={actionReturn.current_url} for {type(actionReturn.action).__name__} to {topic}')
         # check to see if we should flush
         if self.messages_out_since_flush >= self.flush_rate:
             self.messages_out_since_flush = 0
@@ -415,7 +420,7 @@ class ActionChainRunner:
     def main(self):
         killer = GracefulKiller()
         logging.info(f'{type(self).__name__}::main(): beginning subscription poll of kafka')
-        for actionChainParams in self.subscription():
+        for actionChainParams, route in self.subscription():
             # If shutdown was triggered, then do that now
             if killer.kill_now:
                 break
@@ -423,6 +428,8 @@ class ActionChainRunner:
                 self.renewDriverSession()
 
             actionChain = self.implementation(driver=self.driver, **actionChainParams)
+            if 'sample' in route:
+                actionChain.isSample = True
             if not actionChain.shouldRun():
                 logging.info(f'Skipping {actionChain.name}.')
                 # TODO notifications service here
@@ -448,18 +455,26 @@ class ActionChainRunner:
 
 class KafkaActionSubscription(ActionChainRunner):
 
-    def __init__(self, topic,  **kwargs):
+    def __init__(self, *topics,  **kwargs):
         super().__init__(**kwargs)
-        logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topic=[{topic}], prefix=[{os.environ["KAFKA_TOPIC_PREFIX"]}]')
-        self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
-        self.topic = f'{os.environ["KAFKA_TOPIC_PREFIX"]}-{topic}'
-        logging.debug(f'Fully qualified topic=[{self.topic}]')
+        self.topics = list(map(KafkaActionSubscription.topic_name, topics))
 
+        logging.info(f'Starting ActionChainRuner type {type(self).__name__}, topics=[{self.topics}], prefix=[{os.environ["KAFKA_TOPIC_PREFIX"]}]')
+        self._consumer = KafkaConsumer(**kafka_params, value_deserializer=lambda m: json.loads(m.decode('utf-8')))
+
+    @staticmethod
+    def topic_name(topic):
+        return  f'{os.environ["KAFKA_TOPIC_PREFIX"]}-{topic}'
+
+    @staticmethod
+    def get_route(message):
+        return message.topic.split('{os.environ["KAFKA_TOPIC_PREFIX"]}-')[-1]
 
     def subscription(self):
-        self._consumer.subscribe([self.topic])
+        self._consumer.subscribe(self.topics)
         for mes in self._consumer:
-            yield mes.value
+            route = KafkaActionSubscription.get_route(mes)
+            yield mes.value, route
 
 
 class CommandsActionSubscription(ActionChainRunner):

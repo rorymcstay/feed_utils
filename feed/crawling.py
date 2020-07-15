@@ -13,7 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, NoSuchElementException
 from urllib3.exceptions import MaxRetryError, ProtocolError
 import threading
 import subprocess
@@ -130,10 +130,27 @@ class BrowserActions(ActionChain):
                     logging.debug(f'checking class names, classNames=[{classNames}], len=[{len(classNames)}]')
                     for className in classNames:
                         elems = self.driver.find_elements_by_class_name(className)
-                        logging.info(f'found {len(elems)} with className=[{className}]')
+                        logging.info(f'found {len(elems)} elements with className=[{className}]')
                         if len(elems) == 1:
                             logging.info(f'{type(self).__name__}: found unique button to click with className=[{className}], should only have appeared here once')
                             button = elems[0]
+                        else:
+                            found = False
+                            logging.info(f'Checking elems={list(map(lambda item: item.text, elems))}')
+                            for item in elems:
+                                try:
+                                    it = item.find_element_by_link_text(action.text)
+                                except NoSuchElementException:
+                                    if action.text.upper() in str(item).upper():
+                                        it = item
+                                    else:
+                                        continue
+                                if it:
+                                    logging.info(f'Found by text {it}, {action.text}')
+                                    button = it
+                                    found = True
+                                    break
+
         logging.info(f'{type(self).__name__}::onClickAction(): clicking on text={button.text}')
         clickingFrom = self.driver.current_url
         clickTime = time()
