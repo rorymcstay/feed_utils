@@ -1,4 +1,10 @@
-ReturnTypes = ['text', 'src', 'attr', 'element']
+ReturnTypes = [
+    # each Action type expects the ObjectSearchParams::search to return a spec
+    'text', # return the text within the tags
+    'src', # get the src of the html tags. <Tag ... /> in string format
+    'attr', # get an attribute from the tag.
+    'element' # return a WebElement
+]
 
 ActionTypes = [
     "ClickAction",
@@ -9,7 +15,6 @@ ActionTypes = [
 
 
 def get_mandatory_params(actionType):
-
     paramsMap = dict(Action=["css","xpath","text","isSingle", "actionType"],
                      CaptureAction=['captureName'],
                      ClickAction=[],

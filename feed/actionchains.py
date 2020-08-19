@@ -30,6 +30,10 @@ class GracefulKiller:
 
 
 class ObjectSearchParams:
+    """
+    Base class for to hold parameters for an item on page, and verifies the items
+    found are of the correct quantity.
+    """
     def __init__(self, **kwargs):
         #super().__init__(**kwargs)
         self.isSingle = kwargs.get('isSingle', False)
@@ -55,6 +59,9 @@ class ObjectSearchParams:
 
 
 class BrowserSearchParams(ObjectSearchParams):
+    """
+    Implementation for browser driver ObjectSearchParams.
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
@@ -66,6 +73,7 @@ class BrowserSearchParams(ObjectSearchParams):
 
     def _returnItem(self, item, driver):
         logging.debug(f'returning returnType=[{self.returnType}] type for actionType=[{type(self).__name__}]')
+        # define formatter (callable) depending on the returnType
         if self.returnType == 'text':
             formatted = lambda item: item.text
         elif self.returnType == 'src':
