@@ -19,6 +19,9 @@ class Client:
     """
     This class provides a common way to health check other containers and serves
     as a single interface for handling session retrieval and authorisation.
+
+    TODO: make calls to supporting services possible via environment variable, in order
+    to aid unit testing.
     """
     wait = 10
 

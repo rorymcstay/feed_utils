@@ -22,8 +22,8 @@ import argparse
 from feed.settings import browser_params
 from feed.service import Client
 
-from feed.actionchains import ObjectSearchParams, ActionChain, ClickAction, InputAction, CaptureAction, PublishAction, Action
-from feed.actiontypes import ActionableItemNotFound
+from feed.actionchains import ActionChain
+from feed.actiontypes import ActionableItemNotFound, ClickAction, InputAction, CaptureAction, PublishAction, Action
 
 
 def verifyUrl(url):
@@ -63,7 +63,8 @@ class BrowserActions(ActionChain):
 
     @staticmethod
     def _get_button_to_click(item, action):
-        if not isinstance(item, Tag):
+        # TODO should we validate something is clickable or interactable? I believe possible in selenium to check.
+        if not isinstance(item, Tag): # whats the reason for this check? is it bad if not a tag? or should it be validating its something else.
             return item
         if item.text and item.text.upper() == action.text.upper():
             return item
@@ -89,6 +90,9 @@ class BrowserActions(ActionChain):
 
     @staticmethod
     def _searchNavigableStringForTag(navString: NavigableString, text):
+        """
+        private helper function to search navigavle string rescurively
+        """
         if navString == text:
             return BeautifulSoup(str(navString))
         newString = navString.findNextSibling()
@@ -98,40 +102,57 @@ class BrowserActions(ActionChain):
             return None
 
     def _verify_class_string(self, item):
+        """
+        verify that string is valid class name
+        css identifiers sometimes contain "<class_to_apply 1> <class_to_apply_2> ..."
+        a space seperated list of class strings, if this is the case we want to search
+        with those classes for interactable items.
+        """
 
         if ' ' in item:
+            # its a css class list, we should search those classes.
             return False
         else:
             return True
 
     def onClickAction(self, action: ClickAction):
+        """
+        Much of this code is ultimatley using user input to find elements,
+        then use those elements to find other elements
+
+        Need a smarter way - this is where ML would be handy identifying next buttons from html source and
+        where we want to go. Probaly easiest first step.
+        """
         logging.info(f'{type(self).__name__}::onClickAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         try:
             button: WebElement = action.getActionableItem(action, self.driver)
             html_class = button.get_attribute('class')
         except Exception:
             raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
-        # TODO an action chain should cash there last interaction in the case of a repeat so it does not havbe to do the searching again.
+        # TODO an action chain should cache there last interaction in the case of a repeat so it does not havbe to do the searching again.
         if not self._verify_class_string(html_class):
             logging.info(f'{type(self).__name__}::onClickAction: Checking {html_class} for {action.css}')
             html_class = list(filter(lambda item: item in action.css, html_class.split(' ')))[0]
+            # we take the first class only, should probably do all but well probably spend all day need a more intelligent way obviously.
         soup = BeautifulSoup(self.driver.page_source)
         logging.info(f'will search html with html_class=[{html_class}]')
-        items = soup.find_all(attrs={'class': html_class})
+        items = soup.find_all(attrs={'class': html_class}) # find all or one, hoping the button is in there with that class name.
         if len(items) < 1:
             logging.info(f'{type(self).__name__}::onClickAction: Couldnt find button with class=[{html_class}]')
             pass
         else:
             logging.info(f'{type(self).__name__}::onClickAction: items found from html parse. count={len(items)}')
+            # we search for a unique item using find_all, which means well have a list regardless.
             for item in items:
                 altButton = self._get_button_to_click(item, action)
                 if altButton and isinstance(altButton, Tag):
                     classNames = altButton.attrs.get('class')
                     logging.debug(f'checking class names, classNames=[{classNames}], len=[{len(classNames)}]')
-                    for className in classNames:
+                    for className in classNames: # why is this a loop?
                         elems = self.driver.find_elements_by_class_name(className)
                         logging.info(f'found {len(elems)} elements with className=[{className}]')
                         if len(elems) == 1:
+                            # this generally happens 9/10.
                             logging.info(f'{type(self).__name__}: found unique button to click with className=[{className}], should only have appeared here once')
                             button = elems[0]
                         else:
@@ -156,7 +177,8 @@ class BrowserActions(ActionChain):
         clickTime = time()
         buttonTxt = button.text
         button.click()
-        while ( self.driver.current_url == clickingFrom ) and (time() - clickTime <= 5):
+        # probe current url to see if we went anywhere, we dont necessarily have to. might aswell put needed timeout to good use.
+        while ( self.driver.current_url == clickingFrom ) and (time() - clickTime <= 5): # TODO this could be user defined?
             sleep(0.5)
             if self.driver.current_url == clickingFrom:
                 logging.debug(f'{type(self).__name__}::onClickAction(): current url has not changed from clicking on "{buttonTxt}"')
@@ -179,12 +201,19 @@ class BrowserActions(ActionChain):
             return [BrowserActions.Return(current_url=self.driver.current_url, userID=self.userID, name=self.name, action=action,data=data)]
 
     def onPublishAction(self, action: PublishAction):
+        """
+        search for and publish the links of an item or card.
+        TODO need to put chain to publish to on action - logic in rePublish
+        """
         logging.info(f'{type(self).__name__}::onPublishAction: css=[{action.css}], xpath=[{action.xpath}], text=[{action.text}]')
         try:
             data = action.getActionableItem(action, self.driver)
         except Exception:
             raise ActionableItemNotFound(position=action.position, actionHash=action.getActionHash(), chainName=self.name)
         logging.info(f'{type(self).__name__}::onPublishAction: have found data=[{len(data)}]')
+        # TODO next 4 lines are prime example of having getActionableItem inherited on the PublishAction class.
+        # Then we could have publish action ensure `items` is always a list.
+        # at the moment, user specifying non single publish action breaks things. (simple fix just havent used yet)
         cls = data[0].get_attribute('class')
         soup = BeautifulSoup(self.driver.page_source)
         items = soup.findAll(attrs={'class': cls})
@@ -256,6 +285,7 @@ class BrowserActions(ActionChain):
             logging.info(f'BrowserActions::saveHistory: Saving current_url=[{self.driver.current_url}]')
             self.routerClient.get(f'/routingcontroller/updateHistory/{self.name}', payload=self.driver.current_url)
         except Exception as e:
+            # this type of exception really should be in `Client` itself... maybe?
             logging.warning(f'BrowserActions::saveHistory: router is unavailable.')
 
     def initialise(self, caller):
@@ -292,6 +322,8 @@ class BrowserService:
         :param attempts: will recursively try to get a container, do not populate
         """
         if os.getenv('START_BROWSER', False):
+            # this is only used in containerised running - which is intended for. Local dev this doesn't run
+            # as you will have selenium running.
             self.browser_monitor_thread = threading.Thread(target=BrowserService.beginBrowserThread, args=(self,))
             self.browser_monitor_thread.daemon = True
             self.browser_monitor_thread.start()
@@ -346,6 +378,8 @@ class BrowserService:
     def _bind_queue_and_log(queue: Queue, log):
         """
         iterate over next queue item or None and an io stream.
+        ran in seperate thread, given were generally waiting on remote webbrowser requests,
+        fine to probe the std out and std err of the process we started
         """
         # zip together the next item on the queue or None and the next log line
         for i in log:
@@ -359,6 +393,7 @@ class BrowserService:
         """
         sellogger = logging.getLogger('crawling.SeleniumProcessLogger')
         sellogger.info(f'BrowserService::beginBrowserThread(): Starting web browser thread')
+        # run the selenium standalone script
         with subprocess.Popen(os.getenv('SELENIUM_PROCESS_SCRIPT',  "/opt/bin/start-selenium-standalone.sh"), stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as process:
             for line, command in BrowserService._bind_queue_and_log(self.browser_process_command_queue, process.stdout):
                 sellogger.info(f'BrowserService:: {line}')
@@ -374,7 +409,7 @@ class BrowserService:
 
     def _browser_clean_up(self):
         """
-        place a clean up command to the thread monitoring the selenium process
+        place a clean up command to the thread monitoring the selenium process to kill selenium gracefully and for sure.
         """
         logging.info(f'{type(self).__name__}::_browser_clean_up: sending kill command to browser monitor thread')
         self.browser_process_command_queue.put(item='KILL')
