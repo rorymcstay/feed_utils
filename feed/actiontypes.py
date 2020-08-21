@@ -15,6 +15,7 @@ from kafka import KafkaConsumer, KafkaProducer
 
 from feed.service import Client
 from feed.settings import kafka_params, routing_params, nanny_params
+#from feed.actionchains import ActionChain
 
 class ObjectSearchParams:
     """
@@ -155,7 +156,7 @@ class Action(BrowserSearchParams):
         return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}'.encode('utf-8')).hexdigest()
 
     @staticmethod
-    def execute(chain: ActionChain, action):
+    def execute(chain, action):
         """
         Call the actionchains execute method for this action type
         TODO: This should really be moved to the action chain itself, so actions run

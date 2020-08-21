@@ -28,7 +28,7 @@ class TestBrowserActions(SeleniumTestInterface):
 
     @classmethod
     def setUpClass(cls):
-        SeleniumTestInterface.create()
+        SeleniumTestInterface.createSelenium()
 
     def setUp(cls):
         cls.browserService = BrowserService()
@@ -64,5 +64,7 @@ class TestBrowserActions(SeleniumTestInterface):
         cls.actionChain.onClickAction(action)
         cls.assertNotEqual(cls.actionChain.driver.current_url, startUrl)
 
+if __name__ == "__main__":
+    unittest.main()
 
 

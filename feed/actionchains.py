@@ -15,7 +15,12 @@ from kafka import KafkaConsumer, KafkaProducer
 
 from feed.service import Client
 from feed.settings import kafka_params, routing_params, nanny_params
-from feed.actiontypes import Action, ActionChainException
+from feed.actiontypes import Action, \
+        ActionChainException, \
+        ClickAction, \
+        InputAction, \
+        CaptureAction, \
+        PublishAction
 
 
 

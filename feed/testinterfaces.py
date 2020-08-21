@@ -4,6 +4,7 @@ import time
 import os
 from pymongo import MongoClient
 from feed.settings import mongo_params
+from docker.errors import APIError
 
 
 browser_port = os.getenv('BROWSER_PORT', '4444')
@@ -23,9 +24,12 @@ class SeleniumTestInterface(TestCase):
         cls.__client = docker.from_env()
         cls.__client.images.pull(repository='selenium/standalone-chrome', tag="3.141.59")
         # TODO should handle creation here
-        cls.__selenium = cls.__client.containers.run(image='selenium/standalone-chrome:3.141.59', name='test_selenium',
-                                                     ports={'4444/tcp': 4444}, **base_params)
-
+        try:
+            cls.__selenium = cls.__client.containers.run(image='selenium/standalone-chrome:3.141.59', name='test_selenium',
+                                                         ports={'4444/tcp': 4444}, **base_params)
+        except APIError as ex:
+            if ex.status_code != 409:
+                raise ex
     def killSelenium():
         __selenium = docker.from_env().containers.get('test_selenium')
         __selenium.kill()
