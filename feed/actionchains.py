@@ -5,9 +5,9 @@ import traceback
 import requests
 import json
 from json.encoder import JSONEncoder
-from feed.actiontypes import ReturnTypes
 from bs4 import BeautifulSoup, Tag
-
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.remote.webdriver import WebDriver
 import signal
 
 
@@ -15,7 +15,13 @@ from kafka import KafkaConsumer, KafkaProducer
 
 from feed.service import Client
 from feed.settings import kafka_params, routing_params, nanny_params
-from feed.actiontypes import ActionChainException
+from feed.actiontypes import Action, \
+        ActionChainException, \
+        ClickAction, \
+        InputAction, \
+        CaptureAction, \
+        PublishAction
+
 
 
 class GracefulKiller:
@@ -30,10 +36,14 @@ class GracefulKiller:
 
 
 class ObjectSearchParams:
+    """
+    Base class for to hold parameters for an item on page, and verifies the items
+    found are of the correct quantity.
+    """
     def __init__(self, **kwargs):
         #super().__init__(**kwargs)
         self.isSingle = kwargs.get('isSingle', False)
-        self.returnType = kwargs.get('returnType', 'src')
+        self.returnType = kwargs.get('returnType', 'src') # see actiontypes.py ReturnType
         self.attribute = kwargs.get('attribute', None)
 
     def __dict__(self):
@@ -55,6 +65,10 @@ class ObjectSearchParams:
 
 
 class BrowserSearchParams(ObjectSearchParams):
+    """
+    TODO: Move this to crawling.py as it is specific to selenium driver.
+    Implementation for browser driver ObjectSearchParams.
+    """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
@@ -64,8 +78,14 @@ class BrowserSearchParams(ObjectSearchParams):
         #self.text = kwargs.get('class')
         self.backup = None
 
-    def _returnItem(self, item, driver):
+    def _returnItem(self, item: WebElement, driver: WebDriver): # -> ReturnItem
+        """
+        given a located element of the page, and the caller's webdriver, return the item depending on the
+        return type.
+
+        """
         logging.debug(f'returning returnType=[{self.returnType}] type for actionType=[{type(self).__name__}]')
+        # define formatter (callable) depending on the returnType
         if self.returnType == 'text':
             formatted = lambda item: item.text
         elif self.returnType == 'src':
@@ -91,7 +111,7 @@ class BrowserSearchParams(ObjectSearchParams):
         else:
             return retVal
 
-    def search(self, driver):
+    def search(self, driver) -> WebElement:
 
         # first try css selector
         logging.info(f'{type(self).__name__}::search(driver): searching for elemnent with css=[{self.css}]')
@@ -117,105 +137,18 @@ class BrowserSearchParams(ObjectSearchParams):
             # TODO brute search with text at this point
             return None
 
-
-class Action(BrowserSearchParams):
-
-    def __init__(self, position, **kwargs):
-        super().__init__(**kwargs)
-        self.kwargs = kwargs
-        self.position = position
-
-    def getActionHash(self):
-        return hashlib.md5(f'{type(self).__name__}:{self.position}:{self.css}:{self.xpath}'.encode('utf-8')).hexdigest()
-
-    @staticmethod
-    def execute(chain, action):
-        actionType = type(action).__name__
-        try:
-            ret = getattr(chain, f'on{actionType}')(action)
-            logging.debug(f'Action::execute: Action executed succesfully, name=[{chain.name}], position=[{action.position}]')
-            return ret
-        except ActionChainException as ex:
-            Action.publishActionError(chain, ex)
-            logging.info(f'{type(ex).__name__} thrown whilst processing')
-            return False
-        except Exception as ex:
-            traceback.print_exc()
-            logging.warning(f'Action::execute:: {type(ex).__name__} thrown whilst processing name=[{chain.name}], position=[{action.position}], args=[{ex.args}]')
-            Action.publishUnhandledActionError(chain, ex, action)
-            return False
-            # TODO Exception reporting callback called here
-            # OnClickException for example
-
-    def getActionableItem(self, action, driver):
-        item = self.search(driver)
-        logging.info(f'{type(self).__name__}::getActionableItem: have num_items=[{ 1 if not isinstance(item, list) else len(item)}]')
-        return item
-
-    @staticmethod
-    def get_params():
-        # TODO For UI-Server
-        return [self.__dict__().keys()]
-
-    @staticmethod
-    def publishActionError(chain, actionException):
-        actionException.userID = chain.nannyClient.behalf
-        chain.nannyClient.put(f'/actionsmanager/reportActionError/{actionException.chainName}', payload=actionException.__dict__())
-
-    @staticmethod
-    def publishUnhandledActionError(chain, exception, action):
-        #chain.nannyClient.put(f'')
-        logging.warning(f'Unhandled exception in action {action.__dict__()}, exception={exception.args}')
-        pass
-
-
-class CaptureAction(Action):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.returnType = self.kwargs.pop('returnType', 'src')
-        self.parentAttributes = self.kwargs.pop('parentAttributes', {})
-        self.captureName = self.kwargs.pop('captureName') # mandatory
-        self.data = self.kwargs.pop('data', None)
-        self.backupKey = self.kwargs.pop('backupKey', None)
-
-    def __dict__(self):
-        return dict(data=self.data, parentAttributes=self.parentAttributes, backupKey=self.backupKey, captureName=self.captureName, returnType=self.returnType, **self.kwargs)
-
-class InputAction(Action):
-
-    def __init__(self, inputString, **kwargs):
-        super().__init__(**kwargs)
-        self.insputString = inputString
-        self.isSingle = True
-        self.returnType = 'element'
-
-    def __dict__(self):
-        return dict(inputString=self.insputString, **self.kwargs)
-
-class PublishAction(Action):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.urlStub = kwargs.get('urlStub')
-
-    def __dict__(self):
-        return dict(url=self.url, urlStub=self.urlStub, **self.kwargs)
-
-class ClickAction(Action):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.isSingle = True
-        self.returnType = 'element'
-
-
-ActionTypes = {
-    "ClickAction": ClickAction,
-    "InputAction": InputAction,
-    "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
-}
-
-
 class ActionChain:
+    """
+    a list of Actions and methods to support the running of a series of Actions.
+
+    an action has a type, and the action chain has a specific handler method for each
+    particular action.
+    :param: name : name of actionchain
+    :param: startUrl: the starting homepage of the procedure
+    :param: repeating: should the actionchain run repeatedly
+    :param: userID: the user id who requested the actionchain to be ran.
+    :param: actions: A list of Action parameters key value pairs.
+    """
     actions= {}
 
     def __init__(self, **kwargs):
@@ -227,6 +160,10 @@ class ActionChain:
         actionParams = kwargs.get('actions', [])
         self.isSample = False
 
+        # ActionChain has it's own implementation of a http client (a wrapper around requests lib) 
+        # so that we can have implementation of sessions/cookies and or auth amongst services
+        # in the same place, amongst other things.
+        # TODO should enable and disable nanny/router usage by environment variable to aid unit testing.
         self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
         self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
         self.failedChain = False
@@ -242,15 +179,25 @@ class ActionChain:
     def __repr__(self):
         return f'{type(self).__name__}: name={self.name}'
 
-    def recoverHistory(self):
+    def recoverHistory(self) -> None:
+        """
+        make a request to the router service for the last point a repeating actionchain visited.
+        """
         req = self.routerClient.get(f'/routingcontroller/getLastPage/{self.name}', resp=True, errors=[])
         logging.info(f'{type(self).__name__}::recoverHistory have {req} from routing.')
         return req
 
-    def saveHistory(self):
+    def saveHistory(self) -> None:
+        """
+        save the the last page the crawler visited.
+        """
         pass
 
-    def shouldRun(self):
+    def shouldRun(self) -> bool:
+        """
+        determine whether or not the chain should run by checking the previous fail flag to stop
+        a repeating actionchain and request for errors from nanny service.
+        """
         logging.debug(f'Checking if {self.name} should run')
         if self.failedChain:
             return False
@@ -263,7 +210,10 @@ class ActionChain:
         return True
 
     @staticmethod
-    def actionFactory(position, actionParams):
+    def actionFactory(position, actionParams) -> Action:
+        """
+        Construct an action to execute
+        """
         logging.info(f'ActionChain::actionFactory: node=[{position}]: {", ".join(map(lambda key: "{}=[{}]".format(key, actionParams[key]), actionParams))}')
         actionConstructor = ActionTypes.get(actionParams.get('actionType'))
         return actionConstructor(position=position, **actionParams)
@@ -339,6 +289,11 @@ class ActionChain:
 
     def rePublish(self, action, *args, **kwargs):
         pass
+
+
+
+
+
 
 
 class KafkaChainPublisher(ActionChain):
