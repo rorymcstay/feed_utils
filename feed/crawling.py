@@ -23,7 +23,7 @@ from feed.settings import browser_params
 from feed.service import Client
 
 from feed.actionchains import ActionChain
-from feed.actiontypes import ActionableItemNotFound, ClickAction, InputAction, CaptureAction, PublishAction, Action
+from feed.actiontypes import ActionableItemNotFound, ClickAction, InputAction, CaptureAction, PublishAction, Action, LinkActionFunction
 
 
 def verifyUrl(url):
@@ -47,6 +47,7 @@ class BrowserActions(ActionChain):
             self.data = data
             self.action = action
             self.userID = kwargs.get('userID')
+            self.actionFunction = kwargs.get('actionFunction')
 
         def __dict__(self):
             return dict(name=self.name, userID=self.userID, current_url=self.current_url, data=self.data, action=self.action.__dict__())
@@ -54,12 +55,13 @@ class BrowserActions(ActionChain):
     driver = None # type: WebDriver
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
-        self.kwargs = kwargs
-        self.driver = driver
-        self.soup = BeautifulSoup("<div>None</div>")
-        self.backupKeyIncrement = 0
+        if self.__initialised == False:
+            super().__init__(*args, **kwargs)
+            self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
+            self.kwargs = kwargs
+            self.driver = driver
+            self.soup = BeautifulSoup("<div>None</div>")
+            self.backupKeyIncrement = 0
 
     @staticmethod
     def _get_button_to_click(item, action):

@@ -266,12 +266,21 @@ class ClickAction(Action):
         self.isSingle = True
         self.returnType = 'element'
 
+CondtionTypes = ['always', 'count', 'on_previous_error', 'text_present']
+
+class LinkActionFunction(Action):
+    super().__init__(**kwargs)
+    self.actionFunction = kwargs.get('actionFunction')
+    self.conditionType = kwargs.get('conditionType', 'always') # default to always run.
+    self.conditionValue = kwargs.get('conditionValue')
+
 
 ActionTypes = {
     "ClickAction": ClickAction,
     "InputAction": InputAction,
     "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
+    "PublishAction": PublishAction,
+    "LinkActionFunction": LinkActionFunction
 }
 
 
@@ -285,18 +294,11 @@ ReturnTypes = [ # This isn't used so should be implmented properly by type syste
     # TODO: make this into a class hiearchy or ReturnType -> TextReturnType
 ]
 
-ActionTypes = [
-    "ClickAction",
-    "InputAction",
-    "CaptureAction",
-    "PublishAction"
-]
-
-
 def get_mandatory_params(actionType):
     paramsMap = dict(Action=["css","xpath","text","isSingle", "actionType"],
                      CaptureAction=['captureName'],
                      ClickAction=[],
+                     LinkActionFunction=["actionFunction"],
                      InputAction=['inputString'],
                      PublishAction=['urlStub'])
     return list(set(paramsMap.get('Action') + paramsMap.get(actionType, [])))

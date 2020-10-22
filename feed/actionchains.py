@@ -8,6 +8,7 @@ from json.encoder import JSONEncoder
 from bs4 import BeautifulSoup, Tag
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.remote.webdriver import WebDriver
+from feed.actiontypes import ActionTypes
 import signal
 
 
@@ -20,7 +21,9 @@ from feed.actiontypes import Action, \
         ClickAction, \
         InputAction, \
         CaptureAction, \
-        PublishAction
+        PublishAction, \
+        LinkActionFunction
+
 
 
 
@@ -150,23 +153,30 @@ class ActionChain:
     :param: actions: A list of Action parameters key value pairs.
     """
     actions= {}
+    __initialised = False
+    # TODO should call child class constructor if we can.
 
     def __init__(self, **kwargs):
-        self.kwargs = kwargs
+
         self.name = kwargs.get('name')
-        self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
         self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
-        self.isSample = False
 
-        # ActionChain has it's own implementation of a http client (a wrapper around requests lib) 
-        # so that we can have implementation of sessions/cookies and or auth amongst services
-        # in the same place, amongst other things.
-        # TODO should enable and disable nanny/router usage by environment variable to aid unit testing.
-        self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
-        self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
-        self.failedChain = False
+        if not self.__initialised:
+            self.__initialised = True
+            self.startUrl = kwargs.get('startUrl')
+            # only store kwargs once so we can restore after function calls
+            self.kwargs = kwargs
+            self.isSample = False
+            # ActionChain has it's own implementation of a http client (a wrapper around requests lib) 
+            # so that we can have implementation of sessions/cookies and or auth amongst services
+            # in the same place, amongst other things.
+            # TODO should enable and disable nanny/router usage by environment variable to aid unit testing.
+            self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
+            self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
+            self.failedChain = False
+        self.actions = {} # reset actions
         for order, params in enumerate(actionParams):
             try:
                 action = ActionChain.actionFactory(position=order, actionParams=params)
@@ -224,6 +234,14 @@ class ActionChain:
     """
     following methods correspond to module://feed.actiontypes.ActionTypes
     """
+    def onLinkActionFunction(self, LinkActionFunction: action):
+        actionChain = self.nannyClient.get(f'/getActionFunction/{action.actionFunction}')
+        logging.info(f'{self.name} calling action function {action.actionFunction} with parameters {action.kwargs}')
+        # TODO is a reset method better. or self = ActionChain...
+        self.__init__(**actionChain)
+        self.execute(self.caller, initialise=False)
+        self.__init__(self.kwargs)
+
     def onClickAction(self, action):
         raise NotImplementedError
     def onInputAction(self, action):
@@ -245,6 +263,7 @@ class ActionChain:
         self.routerClient.behalf = self.userID
 
     def execute(self, caller, initialise=True):
+        self.caller = caller
         self.initialiseClients()
         self.failedChain = False
         if initialise:
@@ -270,6 +289,9 @@ class ActionChain:
             self.onChainEnd()
 
     def getRepublishRoute(self, action):
+        """
+        Return string if to rePublish to kafka, otherwise False to consume it oneself.
+        """
         logging.debug(f'Getting sample route for {action}. isSample={self.isSample}')
         sample = lambda route: f'{route}-sample'
         name = 'unknown'
@@ -277,6 +299,9 @@ class ActionChain:
             name = 'summarizer-route'
         if isinstance(action, PublishAction):
             name = 'worker-route'
+        if isinstance(action, LinkActionFunction):
+            name = 'ERROR'
+            loggin.warning("We shoud not rePublish Functions, we should implement them ourselves.")
         if isinstance(action, ActionChain):
             # TODO: If publisher wants to invoke a chain to be ran, they should set action to be a new action chain object
             name = 'leader-route'
