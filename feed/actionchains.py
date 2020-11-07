@@ -8,6 +8,7 @@ from json.encoder import JSONEncoder
 from bs4 import BeautifulSoup, Tag
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.remote.webdriver import WebDriver
+from feed.actiontypes import ActionTypes
 import signal
 
 
@@ -20,7 +21,9 @@ from feed.actiontypes import Action, \
         ClickAction, \
         InputAction, \
         CaptureAction, \
-        PublishAction
+        PublishAction, \
+        LinkActionFunction
+
 
 
 
@@ -149,7 +152,7 @@ class ActionChain:
     :param: userID: the user id who requested the actionchain to be ran.
     :param: actions: A list of Action parameters key value pairs.
     """
-    actions= {}
+    actions = {}
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -167,6 +170,10 @@ class ActionChain:
         self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
         self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
         self.failedChain = False
+        self.initialiseActions(actionParams)
+
+    def initialiseActions(self, actionParams):
+        self.actions = {} # reset actions
         for order, params in enumerate(actionParams):
             try:
                 action = ActionChain.actionFactory(position=order, actionParams=params)
@@ -175,6 +182,10 @@ class ActionChain:
                 # TODO: wAt this point we should pass this onto the user
                 traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
+
+    def initialiseLinkedFunction(actionParams, functionName):
+        self.name = f'{self.name}-{functionName}'
+        self.initialiseActions(actionParams)
 
     def __repr__(self):
         return f'{type(self).__name__}: name={self.name}'
@@ -224,6 +235,16 @@ class ActionChain:
     """
     following methods correspond to module://feed.actiontypes.ActionTypes
     """
+    def onLinkActionFunction(self, action):
+        actionFunction = self.nannyClient.get(f'/actionsmanager/getActionFunction/{action.actionFunction}')
+        logging.info(f'{self.name} calling action function {action.actionFunction} with parameters {action.kwargs}')
+        # clear and load new actions
+        self.initialiseLinkedFunction(actionFunction.get('actions'), actionFunction.get('name'))
+        self.execute(self.caller, initialise=False)
+        # reset original actions after functions is called.
+        self.initialiseActions(**self.kwargs.get('actions'))
+        self.name = self.kwargs.get('name')
+
     def onClickAction(self, action):
         raise NotImplementedError
     def onInputAction(self, action):
@@ -245,6 +266,7 @@ class ActionChain:
         self.routerClient.behalf = self.userID
 
     def execute(self, caller, initialise=True):
+        self.caller = caller
         self.initialiseClients()
         self.failedChain = False
         if initialise:
@@ -270,6 +292,9 @@ class ActionChain:
             self.onChainEnd()
 
     def getRepublishRoute(self, action):
+        """
+        Return string if to rePublish to kafka, otherwise False to consume it oneself.
+        """
         logging.debug(f'Getting sample route for {action}. isSample={self.isSample}')
         sample = lambda route: f'{route}-sample'
         name = 'unknown'
@@ -277,6 +302,9 @@ class ActionChain:
             name = 'summarizer-route'
         if isinstance(action, PublishAction):
             name = 'worker-route'
+        if isinstance(action, LinkActionFunction):
+            name = 'ERROR'
+            loggin.warning("We shoud not rePublish Functions, we should implement them ourselves.")
         if isinstance(action, ActionChain):
             # TODO: If publisher wants to invoke a chain to be ran, they should set action to be a new action chain object
             name = 'leader-route'
@@ -289,11 +317,6 @@ class ActionChain:
 
     def rePublish(self, action, *args, **kwargs):
         pass
-
-
-
-
-
 
 
 class KafkaChainPublisher(ActionChain):
@@ -445,9 +468,3 @@ class CommandsActionSubscription(ActionChainRunner):
             yield action
 
 
-ActionTypesMap = {
-    "ClickAction": ClickAction,
-    "InputAction": InputAction,
-    "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
-}
