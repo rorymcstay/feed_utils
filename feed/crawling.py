@@ -55,13 +55,12 @@ class BrowserActions(ActionChain):
     driver = None # type: WebDriver
 
     def __init__(self, driver: WebDriver, *args, **kwargs):
-        if self.__initialised == False:
-            super().__init__(*args, **kwargs)
-            self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
-            self.kwargs = kwargs
-            self.driver = driver
-            self.soup = BeautifulSoup("<div>None</div>")
-            self.backupKeyIncrement = 0
+        super().__init__(*args, **kwargs)
+        self.routerClient.get(f'/routingcontroller/initialiseRoutingSession/{self.name}')
+        self.kwargs = kwargs
+        self.driver = driver
+        self.soup = BeautifulSoup("<div>None</div>")
+        self.backupKeyIncrement = 0
 
     @staticmethod
     def _get_button_to_click(item, action):

@@ -152,30 +152,27 @@ class ActionChain:
     :param: userID: the user id who requested the actionchain to be ran.
     :param: actions: A list of Action parameters key value pairs.
     """
-    actions= {}
-    __initialised = False
-    # TODO should call child class constructor if we can.
+    actions = {}
 
     def __init__(self, **kwargs):
-
+        self.kwargs = kwargs
         self.name = kwargs.get('name')
+        self.startUrl = kwargs.get('startUrl')
         self.repeating = kwargs.get('isRepeating', True)
         self.userID = kwargs.get('userID', None)
         actionParams = kwargs.get('actions', [])
+        self.isSample = False
 
-        if not self.__initialised:
-            self.__initialised = True
-            self.startUrl = kwargs.get('startUrl')
-            # only store kwargs once so we can restore after function calls
-            self.kwargs = kwargs
-            self.isSample = False
-            # ActionChain has it's own implementation of a http client (a wrapper around requests lib) 
-            # so that we can have implementation of sessions/cookies and or auth amongst services
-            # in the same place, amongst other things.
-            # TODO should enable and disable nanny/router usage by environment variable to aid unit testing.
-            self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
-            self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
-            self.failedChain = False
+        # ActionChain has it's own implementation of a http client (a wrapper around requests lib) 
+        # so that we can have implementation of sessions/cookies and or auth amongst services
+        # in the same place, amongst other things.
+        # TODO should enable and disable nanny/router usage by environment variable to aid unit testing.
+        self.nannyClient = Client('nanny', behalf=self.userID, check_health=False, **nanny_params)
+        self.routerClient = Client('router', behalf=self.userID, check_health=False, **routing_params)
+        self.failedChain = False
+        self.initialiseActions(actionParams)
+
+    def initialiseActions(self, actionParams):
         self.actions = {} # reset actions
         for order, params in enumerate(actionParams):
             try:
@@ -185,6 +182,10 @@ class ActionChain:
                 # TODO: wAt this point we should pass this onto the user
                 traceback.print_exc()
                 logging.error(f'{type(self).__name__}::__init__(): chainName=[{self.name}], position=[{order}] actionType=[{params.get("actionType")}] is missing {ex.args} default parameter')
+
+    def initialiseLinkedFunction(actionParams, functionName):
+        self.name = f'{self.name}-{functionName}'
+        self.initialiseActions(actionParams)
 
     def __repr__(self):
         return f'{type(self).__name__}: name={self.name}'
@@ -234,13 +235,15 @@ class ActionChain:
     """
     following methods correspond to module://feed.actiontypes.ActionTypes
     """
-    def onLinkActionFunction(self, LinkActionFunction: action):
-        actionChain = self.nannyClient.get(f'/getActionFunction/{action.actionFunction}')
+    def onLinkActionFunction(self, action):
+        actionFunction = self.nannyClient.get(f'/actionsmanager/getActionFunction/{action.actionFunction}')
         logging.info(f'{self.name} calling action function {action.actionFunction} with parameters {action.kwargs}')
-        # TODO is a reset method better. or self = ActionChain...
-        self.__init__(**actionChain)
+        # clear and load new actions
+        self.initialiseLinkedFunction(actionFunction.get('actions'), actionFunction.get('name'))
         self.execute(self.caller, initialise=False)
-        self.__init__(self.kwargs)
+        # reset original actions after functions is called.
+        self.initialiseActions(**self.kwargs.get('actions'))
+        self.name = self.kwargs.get('name')
 
     def onClickAction(self, action):
         raise NotImplementedError
@@ -314,11 +317,6 @@ class ActionChain:
 
     def rePublish(self, action, *args, **kwargs):
         pass
-
-
-
-
-
 
 
 class KafkaChainPublisher(ActionChain):
@@ -470,9 +468,3 @@ class CommandsActionSubscription(ActionChainRunner):
             yield action
 
 
-ActionTypesMap = {
-    "ClickAction": ClickAction,
-    "InputAction": InputAction,
-    "CaptureAction": CaptureAction,
-    "PublishAction": PublishAction
-}

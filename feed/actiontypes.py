@@ -269,10 +269,11 @@ class ClickAction(Action):
 CondtionTypes = ['always', 'count', 'on_previous_error', 'text_present']
 
 class LinkActionFunction(Action):
-    super().__init__(**kwargs)
-    self.actionFunction = kwargs.get('actionFunction')
-    self.conditionType = kwargs.get('conditionType', 'always') # default to always run.
-    self.conditionValue = kwargs.get('conditionValue')
+    def __init__(kwargs):
+        super().__init__(**kwargs)
+        self.actionFunction = kwargs.get('actionFunction')
+        self.conditionType = kwargs.get('conditionType', 'always') # default to always run.
+        self.conditionValue = kwargs.get('conditionValue')
 
 
 ActionTypes = {

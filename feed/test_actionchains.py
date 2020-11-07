@@ -23,6 +23,11 @@ sh.setFormatter(formatter)
 crawling.addHandler(sh)
 actions.addHandler(sh)
 
+class TestActionChains(TestCase):
+    {"actionType": "CaptureAction", "css": "css_param", "xpath": "xpath_param", "text": "test_param"}
+    {"actionType": "PublishAction", "css": "css_param", "xpath": "xpath_param", "text": "test_param"}
+    {"actionType": "ClickAction", "css": "css_param", "xpath": "xpath_param", "text": "test_param"}
+    {"actionType": "LinkAction", "actionFunction": "test_param"}
 
 class TestBrowserActions(SeleniumTestInterface):
 
